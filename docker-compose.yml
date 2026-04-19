@@ -1,0 +1,20 @@
+services:
+  backend:
+    build: ./backend
+    container_name: ttps-backend
+    env_file:
+      - ./backend/.env
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: ttps-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
