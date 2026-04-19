@@ -5,10 +5,28 @@ import { apiFetch } from '@/lib/api';
 
 const POLL_MS = 2_000;
 
+const IST_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+function useNowIST() {
+  const [now, setNow] = useState(() => IST_FORMATTER.format(new Date()));
+  useEffect(() => {
+    const id = setInterval(() => setNow(IST_FORMATTER.format(new Date())), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
 export default function LiveGeneration() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const now = useNowIST();
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +54,6 @@ export default function LiveGeneration() {
 
   const u1 = data?.[0];
   const u2 = data?.[1];
-  const timestamp = u1?.timestamp || u2?.timestamp;
 
   return (
     <section className="space-y-4">
@@ -46,7 +63,7 @@ export default function LiveGeneration() {
             Live Generation
           </div>
           <div className="mt-1 text-xs text-muted-foreground/80">
-            {timestamp ? <>Source timestamp · <span className="tabular">{timestamp}</span></> : '—'}
+            Now · <span className="tabular">{now} IST</span>
           </div>
         </div>
         <LiveDot state={error ? 'error' : loading ? 'loading' : 'live'} />
@@ -101,7 +118,7 @@ function UnitTile({ label, reading, error }) {
 
 function LiveDot({ state }) {
   const label =
-    state === 'error' ? 'Connection lost' : state === 'loading' ? 'Connecting…' : 'Polling · 5s';
+    state === 'error' ? 'Connection lost' : state === 'loading' ? 'Connecting…' : 'Polling · 2s';
   return (
     <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
       <span className="relative flex h-2 w-2">
