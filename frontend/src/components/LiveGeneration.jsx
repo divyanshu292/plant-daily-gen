@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { apiFetch } from '@/lib/api';
 
 const POLL_MS = 5_000;
 
@@ -13,7 +14,7 @@ export default function LiveGeneration() {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch('/api/live-generation');
+        const res = await apiFetch('/live-generation');
         if (!res.ok) throw new Error();
         const json = await res.json();
         if (cancelled) return;

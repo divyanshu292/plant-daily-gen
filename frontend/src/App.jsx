@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { apiFetch } from '@/lib/api';
 import LiveGeneration from '@/components/LiveGeneration';
 import DataTable from '@/components/DataTable';
 
@@ -49,7 +50,7 @@ export default function App() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/entries?month=${month}`)
+    apiFetch(`/entries?month=${month}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((list) => {
         const map = {};
@@ -82,7 +83,7 @@ export default function App() {
     clearTimeout(saveTimers.current[date]);
     saveTimers.current[date] = setTimeout(() => {
       flashStatus('saving');
-      fetch(`/api/entries/${date}`, {
+      apiFetch(`/entries/${date}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [key]: num }),
