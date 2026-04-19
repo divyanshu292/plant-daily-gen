@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 
-const POLL_MS = 5_000;
+const POLL_MS = 2_000;
 
 export default function LiveGeneration() {
   const [data, setData] = useState(null);
