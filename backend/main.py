@@ -2,6 +2,7 @@ import os
 import re
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -10,13 +11,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
-load_dotenv()
+ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(ROOT_ENV_PATH)
 
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_DB = os.getenv("MONGODB_DB", "ttps")
 
 if not MONGODB_URI:
-    raise SystemExit("Missing MONGODB_URI. Copy .env.example to .env and fill it in.")
+    raise SystemExit("Missing MONGODB_URI. Copy backend/.env.example to .env in project root and fill it in.")
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MONTH_RE = re.compile(r"^\d{4}-\d{2}$")

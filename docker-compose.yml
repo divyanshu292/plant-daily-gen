@@ -3,7 +3,7 @@ services:
     build: ./backend
     container_name: ttps-backend
     env_file:
-      - ./backend/.env
+      - ./.env
     expose:
       - "8000"
     ports:
