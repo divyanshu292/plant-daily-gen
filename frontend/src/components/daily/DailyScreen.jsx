@@ -36,6 +36,9 @@ export function DailyScreen({ arg, health, navigate }) {
 
   const perf = useApiData(date ? `/performance/${date}` : null, { keep: true });
   const reports = useApiData(date ? `/reports?date=${date}` : null);
+  // The recorded live feed for the day, shown only when it covers the whole day. Errors are ignored.
+  const liveDay = useApiData(date ? `/live/day?date=${date}` : null);
+  const feedMu = liveDay.data?.complete && liveDay.data.date === date ? liveDay.data.energy?.stn : null;
 
   const report = useMemo(() => {
     const forDay = (reports.data || []).filter((r) => r.dataDate === date);
@@ -168,6 +171,13 @@ export function DailyScreen({ arg, health, navigate }) {
                 caption={stockCaption(p.stocks?.oil)}
               />
             </div>
+
+            {typeof feedMu === 'number' && (
+              <p className="-mt-2 text-xs text-muted-foreground tabular">
+                Live feed estimate <span className="font-medium text-foreground">{fmtNum(feedMu, 2)} MU</span>
+                {p.hasData && genDay != null && ` (page ${fmtNum(genDay, 2)})`}
+              </p>
+            )}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs leading-relaxed text-muted-foreground">

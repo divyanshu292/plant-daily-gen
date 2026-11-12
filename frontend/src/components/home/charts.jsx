@@ -1,6 +1,6 @@
 // Small inline-SVG charts for the Home screen. Monochrome: marks use the
 // foreground / muted-foreground tokens, `attention` only for what needs a look.
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fmtDate, fmtNum } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -199,6 +199,149 @@ export function TrendChart({ days, metric, baseline, recentFrom, tone = 'default
           </svg>
         )}
       </div>
+    </div>
+  );
+}
+
+const DAY_MIN = 24 * 60;
+// Readings further apart than this are not joined (same rule the server uses for energy).
+const MAX_GAP_MIN = 15;
+const DAY_TICKS = [0, 6, 12, 18, 24];
+
+/** Reading nearest to minute `min`: past the last reading it stays on the last one; in a gap there is none. */
+function nearestReading(points, min) {
+  if (!points.length) return null;
+  const last = points[points.length - 1];
+  if (min >= last.min) return last;
+  let lo = 0;
+  let hi = points.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid].min <= min) lo = mid;
+    else hi = mid;
+  }
+  const p = Math.abs(points[lo].min - min) <= Math.abs(points[hi].min - min) ? points[lo] : points[hi];
+  return Math.abs(p.min - min) <= MAX_GAP_MIN / 2 ? p : null;
+}
+
+/**
+ * One day's station load on a fixed 00–24 h axis, so the empty right-hand part
+ * shows how much of the day is left. A line with a faint wash, a hairline at
+ * full load, faint 6-hourly ticks; readings more than 15 min apart are not
+ * joined. `points` are { min, stn } (minutes since 00:00), oldest first.
+ * `active` / `onActive` ({ min, point } or null) drive the scrub crosshair so
+ * the caller can show the readout.
+ */
+export function DayCurve({ points, capacity, active, onActive, label, height = 96 }) {
+  const [ref, width] = useWidth();
+  const washId = `wash${useId().replace(/:/g, '')}`;
+  const top = 12;
+  const bottom = 17;
+  const plotH = height - top - bottom;
+  const base = top + plotH;
+  let peak = capacity;
+  for (const p of points) if (p.stn != null && p.stn > peak) peak = p.stn;
+  const x = (m) => (m / DAY_MIN) * width;
+  const y = (v) => top + (1 - Math.max(0, v) / peak) * plotH;
+
+  const marks = useMemo(() => {
+    if (!width) return null;
+    const px = (m) => ((m / DAY_MIN) * width).toFixed(1);
+    const py = (v) => (top + (1 - Math.max(0, v) / peak) * plotH).toFixed(1);
+    const runs = [];
+    let run = [];
+    for (const p of points) {
+      const prev = run[run.length - 1];
+      if (p.stn == null || (prev && p.min - prev.min > MAX_GAP_MIN)) {
+        if (run.length) runs.push(run);
+        run = [];
+      }
+      if (p.stn != null) run.push(p);
+    }
+    if (run.length) runs.push(run);
+    let line = '';
+    let area = '';
+    const singles = [];
+    for (const r of runs) {
+      if (r.length === 1) {
+        singles.push(r[0]);
+        continue;
+      }
+      const d = r.map((p, i) => `${i ? 'L' : 'M'}${px(p.min)},${py(p.stn)}`).join('');
+      line += d;
+      area += `M${px(r[0].min)},${base}L${d.slice(1)}L${px(r[r.length - 1].min)},${base}Z`;
+    }
+    return { line, area, singles };
+  }, [points, width, peak, plotH, base]);
+
+  const end = points.length ? points[points.length - 1] : null;
+  const pick = (e) => {
+    if (!onActive || !width) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const min = Math.max(0, Math.min(DAY_MIN, ((e.clientX - rect.left) / width) * DAY_MIN));
+    const point = nearestReading(points, min);
+    onActive({ min: point ? point.min : min, point });
+  };
+  const clear = () => onActive?.(null);
+
+  return (
+    <div ref={ref} style={{ height }} className="touch-pan-y select-none">
+      {width > 0 && (
+        <svg
+          width={width}
+          height={height}
+          className="block overflow-visible text-foreground"
+          role="img"
+          aria-label={label}
+          onPointerMove={pick}
+          onPointerDown={pick}
+          onPointerLeave={clear}
+          onPointerCancel={clear}
+        >
+          <defs>
+            <linearGradient id={washId} x1="0" x2="0" y1={top} y2={base} gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="currentColor" stopOpacity={0.13} />
+              <stop offset="1" stopColor="currentColor" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          {DAY_TICKS.slice(1, -1).map((h) => (
+            <line key={h} x1={x(h * 60)} x2={x(h * 60)} y1={top} y2={base} className="stroke-border" strokeWidth={1} />
+          ))}
+          <line x1={0} x2={width} y1={y(capacity) - 0.5} y2={y(capacity) - 0.5} className="stroke-border" strokeWidth={1} />
+          <text x={width} y={y(capacity) - 4} textAnchor="end" className="fill-muted-foreground text-[10px] tabular" fillOpacity={0.8}>
+            {capacity} MW
+          </text>
+          <line x1={0} x2={width} y1={base + 0.5} y2={base + 0.5} className="stroke-border" strokeWidth={1} />
+          <path d={marks.area} fill={`url(#${washId})`} />
+          <path d={marks.line} fill="none" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" className="stroke-foreground" />
+          {marks.singles.map((p) => (
+            <circle key={p.min} cx={x(p.min)} cy={y(p.stn)} r={1.5} className="fill-foreground" />
+          ))}
+          {end && end.stn != null && !active && (
+            <circle cx={x(end.min)} cy={y(end.stn)} r={4} strokeWidth={2} className="fill-foreground stroke-background" />
+          )}
+          {active && (
+            <g>
+              <line x1={x(active.min)} x2={x(active.min)} y1={top} y2={base} className="stroke-muted-foreground" strokeWidth={1} />
+              {active.point?.stn != null && (
+                <circle cx={x(active.min)} cy={y(active.point.stn)} r={4} strokeWidth={2} className="fill-foreground stroke-background" />
+              )}
+            </g>
+          )}
+          {DAY_TICKS.map((h, i) => (
+            <text
+              key={h}
+              x={x(h * 60)}
+              y={height - 3}
+              textAnchor={i === 0 ? 'start' : i === DAY_TICKS.length - 1 ? 'end' : 'middle'}
+              className="fill-muted-foreground text-[10px] tabular"
+              fillOpacity={0.8}
+            >
+              {String(h).padStart(2, '0')}
+            </text>
+          ))}
+        </svg>
+      )}
     </div>
   );
 }

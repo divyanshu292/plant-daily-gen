@@ -82,7 +82,7 @@ export function HomeScreen({ health, navigate }) {
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-x-14">
       <div className="space-y-8">
-        <LivePanel />
+        <LivePanel askingRate={a?.progress?.month?.askingRate ?? null} />
         <div className={cn('space-y-8', dim)}>
           {a && analytics.error && <ReloadFailed error={analytics.error} onRetry={reload} />}
           {left}

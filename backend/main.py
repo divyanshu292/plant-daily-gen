@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import math
 import os
 import re
@@ -15,7 +16,7 @@ import certifi
 import httpx
 from bson.binary import Binary
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Query, Response, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -31,6 +32,7 @@ load_dotenv(ROOT_ENV_PATH)
 import analytics  # noqa: E402
 import calc  # noqa: E402
 import extract  # noqa: E402
+import live  # noqa: E402
 import workbook_import  # noqa: E402
 from validate import cross_checks, validate  # noqa: E402
 
@@ -65,9 +67,13 @@ TEXT_FIELDS = {"u1TripReason", "u2TripReason", "u1Remark", "u2Remark"}
 # index (the database's own background job, so it works on serverless hosts).
 IMAGE_RETENTION_DAYS = 15
 IMAGE_TTL_INDEX = "createdAt_ttl"
+# Live feed readings (live.py) are deleted the same way, this long after their stamp.
+LIVE_RETENTION_DAYS = 90
+LIVE_TTL_INDEX = "ts_ttl"
 
 LIVE_URL = "https://tpro.telsys.in/tpportal/power_generation?param=ajax_call&status_check=true"
 LIVE_CACHE_TTL_S = 3
+LIVE_COLLECTION = "live_readings"
 
 client: Optional[AsyncIOMotorClient] = None
 # Opened on first use. dev_server.py and the tests put an in-memory database here.
@@ -75,6 +81,9 @@ db = None
 
 http_client: Optional[httpx.AsyncClient] = None
 live_cache: dict = {"data": None, "fetched_at": 0.0}
+# The feed minute this process last recorded (or tried to). The Home screen polls
+# every few seconds, but a new reading arrives only every 2 minutes or so.
+live_recorded: dict = {"at": None}
 
 
 def _mongo_client(uri: str) -> AsyncIOMotorClient:
@@ -102,14 +111,15 @@ def _db():
 
 _indexed_db = None
 
-# Every query the API makes is served by one of these (report_images is read by
-# _id and has its TTL index, below):
-#   entries  one day, or a date range sorted by date; latest day with
-#            generation (walks the date index backwards)        -> date
-#   reports  one report by id (open, confirm, image check)      -> id
-#            newest first (Recent uploads)                       -> createdAt
-#            one day or one month, newest first (Daily report)   -> dataDate, createdAt
-#   config   one fiscal year                                     -> fy
+# Every query the API makes is served by one of these, or by a TTL index
+# (_ensure_indexes; report_images is otherwise read by _id):
+#   entries        one day, or a date range sorted by date; latest day with
+#                  generation (walks the date index backwards)        -> date
+#   reports        one report by id (open, confirm, image check)      -> id
+#                  newest first (Recent uploads)                       -> createdAt
+#                  one day or one month, newest first (Daily report)   -> dataDate, createdAt
+#   config         one fiscal year                                     -> fy
+#   live_readings  one IST day by time; the latest reading             -> ts (its TTL index)
 INDEXES = {
     "entries": [IndexModel([("date", ASCENDING)], unique=True)],
     "reports": [
@@ -121,26 +131,30 @@ INDEXES = {
 }
 
 
-async def _ensure_image_ttl(database) -> None:
-    images = database["report_images"]
-    ttl = IMAGE_RETENTION_DAYS * 24 * 3600
-    current = (await images.index_information()).get(IMAGE_TTL_INDEX)
+async def _ensure_ttl(database, collection: str, field: str, name: str, days: int) -> None:
+    """A TTL index deleting documents `days` after their `field` date."""
+    ttl = days * 24 * 3600
+    current = (await database[collection].index_information()).get(name)
     if current is None:
-        await images.create_index("createdAt", name=IMAGE_TTL_INDEX, expireAfterSeconds=ttl)
+        await database[collection].create_index(field, name=name, expireAfterSeconds=ttl)
     elif current.get("expireAfterSeconds") != ttl:
         # Retention changed: update the existing index in place.
-        await database.command("collMod", "report_images",
-                               index={"name": IMAGE_TTL_INDEX, "expireAfterSeconds": ttl})
+        await database.command("collMod", collection, index={"name": name, "expireAfterSeconds": ttl})
 
 
 async def _ensure_indexes() -> None:
     """Create the indexes once per database handle. Idempotent; also run before
-    the first upload in case the host skipped the startup hook. The collections
-    are done in parallel, so a cold start pays about one round trip, not six."""
+    the first upload or live recording in case the host skipped the startup
+    hook. The collections are done in parallel, so a cold start pays about one
+    round trip, not one per collection."""
     global _indexed_db
     database = _db()
     if _indexed_db is database:
         return
+    ttls = (
+        ("report_images", "createdAt", IMAGE_TTL_INDEX, IMAGE_RETENTION_DAYS),
+        (LIVE_COLLECTION, "ts", LIVE_TTL_INDEX, LIVE_RETENTION_DAYS),
+    )
 
     async def build(name: str, models: list) -> None:
         try:
@@ -150,7 +164,8 @@ async def _ensure_indexes() -> None:
             # just slower, so report it rather than failing every request.
             print(f"Could not create indexes on {name}: {exc}")
 
-    await asyncio.gather(_ensure_image_ttl(database), *(build(n, m) for n, m in INDEXES.items()))
+    await asyncio.gather(*(_ensure_ttl(database, *ttl) for ttl in ttls),
+                         *(build(n, m) for n, m in INDEXES.items()))
     _indexed_db = database
 
 
@@ -204,8 +219,12 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _ist_now() -> datetime:
+    return datetime.now(IST)
+
+
 def _today() -> date:
-    return datetime.now(IST).date()
+    return _ist_now().date()
 
 
 def _check_date(value: str) -> date:
@@ -402,6 +421,9 @@ async def upload_report(file: UploadFile = File(...)):
     if check.data_date:
         context = await _month_context(check.data_date)
         extra, missing_days = cross_checks(result.report, check.entry, check.data_date, context)
+        # The recorded live feed's own figure for the day, when it covers the day.
+        # Warnings only: `status` was settled above from the page's own checks.
+        extra += live.generation_checks(await _live_day(check.data_date), check.entry)
         checks += [c.__dict__ for c in extra]
         existing = await _db()["entries"].find_one({"date": check.data_date.isoformat()}, {"_id": 0})
         replaced = bool(existing and (existing.get("u1Gen") is not None or existing.get("u2Gen") is not None))
@@ -596,9 +618,9 @@ async def import_workbook(file: UploadFile = File(...), overwrite: bool = False)
 
 # --- live feed --------------------------------------------------------------------------
 
-@app.get("/api/live-generation")
-async def live_generation():
-    """Proxy the upstream TTPS portal feed (bypasses browser CORS)."""
+async def _fetch_live():
+    """The portal's current feed. Cached briefly, so however many screens poll,
+    the portal is asked about once every LIVE_CACHE_TTL_S per process."""
     now = time.time()
     if live_cache["data"] is not None and now - live_cache["fetched_at"] < LIVE_CACHE_TTL_S:
         return live_cache["data"]
@@ -612,3 +634,80 @@ async def live_generation():
     live_cache["data"] = data
     live_cache["fetched_at"] = now
     return data
+
+
+async def _record_reading(reading: dict) -> bool:
+    """Store a parsed reading (idempotent). True if its minute was new."""
+    await _ensure_indexes()
+    recorded = await live.record(_db()[LIVE_COLLECTION], reading)
+    live_recorded["at"] = reading["at"]
+    return recorded
+
+
+async def _record_quietly(data) -> None:
+    """Record the feed's reading if this process has not already. Never raises:
+    the live figures on screen matter more than the history."""
+    reading = live.parse_feed(data)
+    if reading is None or reading["at"] == live_recorded["at"]:
+        return
+    # Marked before the write, so concurrent polls do not all write it, and a
+    # failed write is next tried with the next reading rather than on every poll.
+    # The scheduler (/api/live/record) fills in what a failure misses.
+    live_recorded["at"] = reading["at"]
+    try:
+        await _record_reading(reading)
+    except Exception as exc:  # whatever went wrong, it must not reach the live response
+        print(f"Could not record live reading {reading['at']}: {getattr(exc, 'detail', exc)}")
+
+
+async def _live_day(day: date) -> dict:
+    """live.summarize() of one IST day, from the stored readings."""
+    start, end = live.day_window(day)
+    readings, config = await asyncio.gather(
+        live.readings_between(_db()[LIVE_COLLECTION], start, end), _config(calc.fiscal_year(day)))
+    return live.summarize(readings, day, _ist_now(), unit_mw=config["unitMw"])
+
+
+@app.get("/api/live-generation")
+async def live_generation():
+    """Proxy the upstream TTPS portal feed (bypasses browser CORS) and record
+    each new reading. If the portal cannot be reached, the last recorded
+    reading is returned in the same shape with "stale": true on each item."""
+    try:
+        data = await _fetch_live()
+    except HTTPException as exc:
+        last = None
+        try:
+            last = await live.last_reading(_db()[LIVE_COLLECTION])
+        except (HTTPException, PyMongoError) as db_exc:
+            print(f"No stored live reading to fall back on: {getattr(db_exc, 'detail', db_exc)}")
+        if last is None:
+            raise exc
+        return live.stale_feed(last)
+    await _record_quietly(data)
+    return data
+
+
+@app.api_route("/api/live/record", methods=["GET", "POST"])
+async def live_record(key: Optional[str] = None, x_record_key: Optional[str] = Header(None)):
+    """Fetch the portal and store its reading. For an outside scheduler calling
+    every minute, so the history has no holes while nobody has the app open.
+    The key (LIVE_RECORD_KEY) comes as ?key= or an X-Record-Key header."""
+    expected = os.getenv("LIVE_RECORD_KEY")  # read per request, not at import
+    if not expected:
+        raise HTTPException(503, "Recording is not configured. Set LIVE_RECORD_KEY on the server.")
+    given = key or x_record_key or ""
+    if not hmac.compare_digest(given.encode(), expected.encode()):
+        raise HTTPException(401, "Wrong or missing record key")
+    reading = live.parse_feed(await _fetch_live())
+    if reading is None:
+        raise HTTPException(502, "The portal's reply has no readable reading")
+    recorded = await _record_reading(reading)
+    return {"recorded": recorded, "at": reading["at"], "u1": reading["u1"], "u2": reading["u2"]}
+
+
+@app.get("/api/live/day")
+async def live_day(day: Optional[str] = Query(None, alias="date")):
+    """One IST day of recorded readings (default today): load curve, energy,
+    PLF, projection, trips. Shape: live.summarize()."""
+    return await _live_day(_check_date(day) if day else _today())

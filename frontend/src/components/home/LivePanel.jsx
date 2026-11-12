@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LightningIcon } from '@phosphor-icons/react';
 import { apiFetch } from '@/lib/api';
 import { MicroLabel } from '@/components/common/Text';
+import { TodayLoad, clockOf, hhmm } from '@/components/home/TodayLoad';
 import { fmtNum } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -29,6 +30,15 @@ function parseFeedTime(text) {
   const month = MONTHS.indexOf(m[2].toLowerCase());
   if (month < 0) return null;
   return Date.UTC(+m[3], month, +m[1], +m[4], +m[5]) - 330 * 60 * 1000;
+}
+
+/** "just now", "4 min ago", "1 h 5 min ago". The feed's stamp is to the minute. */
+function ago(ms) {
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  return `${h} h${min % 60 ? ` ${min % 60} min` : ''} ago`;
 }
 
 function pickUnit(list, n) {
@@ -59,7 +69,9 @@ function useLiveFeed() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!Array.isArray(json)) throw new Error('Unexpected live feed');
-        if (!cancelled) setState({ list: json, ok: true });
+        // Portal down: the server answers with the last recorded reading, marked stale.
+        const stale = json.some((r) => r?.stale === true);
+        if (!cancelled) setState({ list: json, ok: !stale });
       } catch {
         if (!cancelled) setState((s) => (s.ok === false ? s : { ...s, ok: false }));
       } finally {
@@ -89,9 +101,12 @@ function useNow() {
   return now;
 }
 
-export function LivePanel() {
+/** `askingRate`: MU/day the month still needs, compared with where today is heading. */
+export function LivePanel({ askingRate = null }) {
   const { list, ok } = useLiveFeed();
   const now = useNow();
+  // The load-curve reading under the finger or pointer: { min, point } or null.
+  const [scrub, setScrub] = useState(null);
   const u1 = powerOf(pickUnit(list, 1));
   const u2 = powerOf(pickUnit(list, 2));
   const total = u1 != null && u2 != null ? u1 + u2 : null;
@@ -105,7 +120,7 @@ export function LivePanel() {
   let feedText = stamp || '';
   if (feedAt != null) {
     const sameDay = IST_DAY.format(new Date(feedAt)) === IST_DAY.format(new Date(now));
-    feedText = `${sameDay ? '' : `${IST_DAY.format(new Date(feedAt))} `}${String(stamp).trim().split(/\s+/)[1]}`;
+    feedText = `${sameDay ? '' : `${IST_DAY.format(new Date(feedAt))} `}${String(stamp).trim().split(/\s+/)[1]} · ${ago(now - feedAt)}`;
   }
 
   return (
@@ -131,15 +146,41 @@ export function LivePanel() {
         <UnitLoad label="Unit 2" mw={u2} />
       </div>
 
-      <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground tabular">
-        <span>{IST_CLOCK.format(new Date(now))} IST</span>
-        {stamp && (
-          <span className={cn((state === 'late' || dim) && 'text-attention')}>
-            {dim ? 'Last reading' : 'Feed'} {feedText}
-          </span>
+      {/* While the curve below is scrubbed, this line reads it out. */}
+      <div className="flex h-4 items-center justify-between gap-3 text-[11px] text-muted-foreground tabular">
+        {scrub ? (
+          <ScrubReadout scrub={scrub} />
+        ) : (
+          <>
+            <span>{IST_CLOCK.format(new Date(now))} IST</span>
+            {stamp && (
+              <span className={cn('truncate', (state === 'late' || dim) && 'text-attention')}>
+                {dim ? 'Last reading' : 'Updated'} {feedText}
+              </span>
+            )}
+          </>
         )}
       </div>
+
+      <TodayLoad stamp={stamp} askingRate={askingRate} active={scrub} onActive={setScrub} />
     </section>
+  );
+}
+
+function ScrubReadout({ scrub }) {
+  const p = scrub.point;
+  return (
+    <>
+      <span>{p ? hhmm(p.at) : clockOf(scrub.min)} IST</span>
+      {p ? (
+        <span className="truncate">
+          <span className="font-medium text-foreground">{p.stn != null ? `${fmtNum(p.stn, 1)} MW` : '—'}</span>
+          {' · '}U1 {fmtNum(p.u1, 1)} · U2 {fmtNum(p.u2, 1)}
+        </span>
+      ) : (
+        <span>no reading</span>
+      )}
+    </>
   );
 }
 
@@ -172,7 +213,7 @@ function UnitLoad({ label, mw }) {
 const STATES = {
   connecting: { label: 'Connecting', dot: 'bg-muted-foreground/40' },
   live: { label: 'Live', dot: 'bg-foreground', ping: true },
-  late: { label: 'Feed late', dot: 'bg-attention', text: 'text-attention' },
+  late: { label: 'Delayed', dot: 'bg-attention', text: 'text-attention' },
   stale: { label: 'Stale', dot: 'bg-attention', text: 'text-attention' },
   offline: { label: 'No feed', dot: 'bg-attention', text: 'text-attention' },
 };

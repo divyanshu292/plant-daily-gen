@@ -9,13 +9,19 @@
   (recognised by image shape). Any other portrait image returns a page with one
   wrong digit, to exercise the needs-review path, and a landscape image is
   rejected as not being a report.
+- Live readings start empty. DEV_SEED_LIVE=1 fills today from 00:00 to now with
+  a synthetic day (every 2 minutes, 140-165 MW, one Unit 2 trip and return),
+  so the Home screen's load curve has something to draw.
 
 Nothing here is used in production; main.py is the real entry point.
 """
 
 import asyncio
 import json
+import math
 import os
+import random
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
 import uvicorn
@@ -24,6 +30,7 @@ from mongomock_motor import AsyncMongoMockClient
 os.environ.setdefault("MONGODB_URI", "")
 import main  # noqa: E402
 import extract  # noqa: E402
+import live  # noqa: E402
 import workbook_import  # noqa: E402
 from report_schema import DailySystemReport  # noqa: E402
 
@@ -71,6 +78,44 @@ async def seed() -> None:
     print(f"dev: seeded {len(book['entries'])} days from {books[-1].name}")
 
 
+def synthetic_day(now: datetime) -> list[dict]:
+    """Readings every 2 minutes from today 00:00 IST to `now`: both units
+    around 140-165 MW, following a daily swing, with Unit 2 tripping a little
+    before the middle of the day so far and coming back about two hours later."""
+    start = datetime.combine(now.date(), time(0), live.IST)
+    elapsed = now - start
+    trip_at = start + elapsed * 0.45
+    back_at = trip_at + min(timedelta(hours=2), elapsed * 0.2)
+    ramp = timedelta(minutes=50)  # back on the grid at ~20 MW, then loading up
+    rng = random.Random(now.date().toordinal())  # the same day each restart
+    readings = []
+    t = start
+    while t <= now:
+        hour = (t - start).total_seconds() / 3600
+        # Low in the small hours, highest in the evening peak.
+        swing = 152 + 9 * math.sin((hour - 13) / 24 * 2 * math.pi)
+        u1 = min(max(swing + rng.uniform(-3, 3), 140), 165)
+        u2 = min(max(swing + 2 + rng.uniform(-3, 3), 140), 165)
+        if trip_at <= t < back_at:
+            u2 = rng.uniform(0, 1.5)  # a stopped unit's feed hovers just above zero
+        elif back_at <= t < back_at + ramp:
+            u2 = 20 + (u2 - 20) * (t - back_at) / ramp
+        at = live.minute_key(t)
+        readings.append({"at": at, "ts": t.astimezone(timezone.utc), "u1": round(u1, 2), "u2": round(u2, 2),
+                         "u1At": at, "u2At": at})
+        t += timedelta(minutes=2)
+    return readings
+
+
+async def seed_live() -> None:
+    readings = synthetic_day(main._ist_now())
+    if readings:
+        await main.db[main.LIVE_COLLECTION].insert_many([live.to_doc(r) for r in readings])
+    print(f"dev: seeded {len(readings)} synthetic live readings for today")
+
+
 if __name__ == "__main__":
     asyncio.run(seed())
+    if os.getenv("DEV_SEED_LIVE") == "1":
+        asyncio.run(seed_live())
     uvicorn.run(main.app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
