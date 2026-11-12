@@ -82,7 +82,7 @@ python -m venv .venv
 
 **Docker:** `docker compose up --build` runs the backend on 8000 and the frontend on 5173.
 
-**Vercel:** `vercel.json` defines two services: `backend/` (FastAPI, `main:app`) and `frontend/` (Vite). Requests to `/api/*` go to the backend with the path unchanged; everything else goes to the frontend. Set `MONGODB_URI`, `MONGODB_DB` and `GEMINI_API_KEY` in the Vercel project's environment variables. Vercel installs `backend/requirements.txt`, which holds runtime dependencies only. Test tools are in `requirements-dev.txt`.
+**Vercel:** `vercel.json` defines two services: `backend/` (FastAPI, `main:app`) and `frontend/` (Vite). Requests to `/api/*` go to the backend with the path unchanged; everything else goes to the frontend. Set `MONGODB_URI`, `MONGODB_DB` and `GEMINI_API_KEY` in the Vercel project's environment variables. `"regions": ["bom1"]` runs the functions in Mumbai, next to the Atlas cluster (GCP asia-south1). Each database round trip is then a few milliseconds instead of a couple of hundred from Vercel's default US region. If the cluster ever moves, move this with it. Vercel installs `backend/requirements.txt`, which holds runtime dependencies only. Test tools are in `requirements-dev.txt`.
 
 ## Importing history from the workbook
 

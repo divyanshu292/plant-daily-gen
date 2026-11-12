@@ -457,6 +457,9 @@ def test_ttl_index_is_updated_when_retention_changes(monkeypatch):
         async def create_index(self, *args, **kwargs):
             return "ok"
 
+        async def create_indexes(self, models):
+            return ["ok"] * len(models)
+
         async def index_information(self):
             return self.info
 
@@ -479,3 +482,41 @@ def test_ttl_index_is_updated_when_retention_changes(monkeypatch):
                                   {"index": {"name": main.IMAGE_TTL_INDEX, "expireAfterSeconds": 15 * 24 * 3600}})]
     run(main._ensure_indexes())  # once per database handle
     assert len(database.commands) == 1
+
+
+# --- indexes and response size ----------------------------------------------------------------
+
+def test_every_query_has_an_index(client):
+    run(main._ensure_indexes())
+    keys = {name: {tuple(i["key"]): i.get("unique", False)
+                   for i in run(main.db[name].index_information()).values()}
+            for name in ("entries", "reports", "config", "report_images")}
+    assert keys["entries"][(("date", 1),)] is True
+    assert keys["reports"][(("id", 1),)] is True
+    assert (("createdAt", -1),) in keys["reports"]
+    assert (("dataDate", 1), ("createdAt", -1)) in keys["reports"]
+    assert keys["config"][(("fy", 1),)] is True
+    assert (("createdAt", 1),) in keys["report_images"]
+
+
+def test_reports_for_one_day(client, reader):
+    reader(load_report(PAGE_1))
+    body = upload(client).json()
+    day = body["dataDate"]
+    assert [r["id"] for r in client.get("/api/reports", params={"date": day}).json()] == [body["id"]]
+    assert client.get("/api/reports", params={"date": "2026-10-01"}).json() == []
+    assert client.get("/api/reports", params={"month": day[:7]}).json()[0]["id"] == body["id"]
+    assert client.get("/api/reports", params={"date": "2026-13-01"}).status_code == 400
+
+
+def test_json_is_gzipped_but_images_are_not(client, reader):
+    for d in range(1, 29):
+        client.put(f"/api/entries/2026-10-{d:02d}", json={"u1Gen": 4.5, "u2Gen": 4.6, "u1Remark": "running"})
+    response = client.get("/api/entries", params={"month": "2026-10"}, headers={"Accept-Encoding": "gzip"})
+    assert response.headers["content-encoding"] == "gzip"
+    assert len(response.json()) == 28
+
+    reader(load_report(PAGE_1))
+    report_id = upload(client).json()["id"]
+    image = client.get(f"/api/reports/{report_id}/image", headers={"Accept-Encoding": "gzip"})
+    assert image.status_code == 200 and "content-encoding" not in image.headers

@@ -1,3 +1,4 @@
+import asyncio
 import math
 import os
 import re
@@ -14,10 +15,12 @@ import certifi
 import httpx
 from bson.binary import Binary
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo.errors import PyMongoError
+from pymongo import ASCENDING, DESCENDING, IndexModel
+from pymongo.errors import OperationFailure, PyMongoError
 
 # Sibling modules are imported by bare name; make that work however the app is launched.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -99,16 +102,26 @@ def _db():
 
 _indexed_db = None
 
+# Every query the API makes is served by one of these (report_images is read by
+# _id and has its TTL index, below):
+#   entries  one day, or a date range sorted by date; latest day with
+#            generation (walks the date index backwards)        -> date
+#   reports  one report by id (open, confirm, image check)      -> id
+#            newest first (Recent uploads)                       -> createdAt
+#            one day or one month, newest first (Daily report)   -> dataDate, createdAt
+#   config   one fiscal year                                     -> fy
+INDEXES = {
+    "entries": [IndexModel([("date", ASCENDING)], unique=True)],
+    "reports": [
+        IndexModel([("id", ASCENDING)], unique=True),
+        IndexModel([("createdAt", DESCENDING)]),
+        IndexModel([("dataDate", ASCENDING), ("createdAt", DESCENDING)]),
+    ],
+    "config": [IndexModel([("fy", ASCENDING)], unique=True)],
+}
 
-async def _ensure_indexes() -> None:
-    """Create the indexes once per database handle. Idempotent; also run before
-    the first upload in case the host skipped the startup hook."""
-    global _indexed_db
-    database = _db()
-    if _indexed_db is database:
-        return
-    await database["entries"].create_index("date", unique=True)
-    await database["reports"].create_index([("dataDate", 1), ("createdAt", -1)])
+
+async def _ensure_image_ttl(database) -> None:
     images = database["report_images"]
     ttl = IMAGE_RETENTION_DAYS * 24 * 3600
     current = (await images.index_information()).get(IMAGE_TTL_INDEX)
@@ -118,6 +131,26 @@ async def _ensure_indexes() -> None:
         # Retention changed: update the existing index in place.
         await database.command("collMod", "report_images",
                                index={"name": IMAGE_TTL_INDEX, "expireAfterSeconds": ttl})
+
+
+async def _ensure_indexes() -> None:
+    """Create the indexes once per database handle. Idempotent; also run before
+    the first upload in case the host skipped the startup hook. The collections
+    are done in parallel, so a cold start pays about one round trip, not six."""
+    global _indexed_db
+    database = _db()
+    if _indexed_db is database:
+        return
+
+    async def build(name: str, models: list) -> None:
+        try:
+            await database[name].create_indexes(models)
+        except OperationFailure as exc:
+            # e.g. duplicate values blocking a unique index: queries still work,
+            # just slower, so report it rather than failing every request.
+            print(f"Could not create indexes on {name}: {exc}")
+
+    await asyncio.gather(_ensure_image_ttl(database), *(build(n, m) for n, m in INDEXES.items()))
     _indexed_db = database
 
 
@@ -142,6 +175,23 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="TTPS API", lifespan=lifespan)
 
+
+class JsonGZipMiddleware:
+    """gzip the JSON responses, which shrink about tenfold (a year of entries
+    is ~200 kB raw), but pass page images through: JPEG does not compress."""
+
+    def __init__(self, app):
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=1024, compresslevel=6)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].endswith("/image"):
+            await self.app(scope, receive, send)
+        else:
+            await self.gzip(scope, receive, send)
+
+
+app.add_middleware(JsonGZipMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -190,10 +240,21 @@ def _clean_fields(payload: dict) -> dict:
     return clean
 
 
+# A fiscal year of entries in one batch: the driver's default first batch is
+# 101 documents, and every further batch costs another round trip to the database.
+ENTRIES_BATCH = 1000
+
+
+def _month_range(month: str) -> dict:
+    """A YYYY-MM month as a range on YYYY-MM-DD strings: a plain index range
+    (a regex prefix works too, but the planner bounds a range more tightly)."""
+    return {"$gte": f"{month}-01", "$lte": f"{month}-31"}
+
+
 async def _entries_between(start: date, end: date) -> list[dict]:
     cursor = _db()["entries"].find(
         {"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}}, {"_id": 0}
-    ).sort("date", 1)
+    ).sort("date", 1).batch_size(ENTRIES_BATCH)
     return await cursor.to_list(length=None)
 
 
@@ -244,10 +305,10 @@ async def list_entries(month: Optional[str] = None, fy: Optional[int] = None):
     if month:
         if not MONTH_RE.match(month):
             raise HTTPException(400, "Invalid month format (YYYY-MM)")
-        query["date"] = {"$regex": f"^{month}"}
+        query["date"] = _month_range(month)
     elif fy:
         query["date"] = {"$gte": f"{fy}-04-01", "$lte": f"{fy + 1}-03-31"}
-    cursor = _db()["entries"].find(query, {"_id": 0}).sort("date", 1)
+    cursor = _db()["entries"].find(query, {"_id": 0}).sort("date", 1).batch_size(ENTRIES_BATCH)
     return await cursor.to_list(length=None)
 
 
@@ -377,13 +438,17 @@ async def upload_report(file: UploadFile = File(...)):
 
 
 @app.get("/api/reports")
-async def list_reports(month: Optional[str] = None, limit: int = 60):
-    """Uploaded reports, newest first, without the full transcription."""
+async def list_reports(month: Optional[str] = None, day: Optional[str] = Query(None, alias="date"),
+                       limit: int = 60):
+    """Uploaded reports, newest first, without the full transcription. `date`
+    (YYYY-MM-DD) or `month` (YYYY-MM) picks the reports whose data is for that day or month."""
     query: dict = {}
-    if month:
+    if day:
+        query["dataDate"] = _check_date(day).isoformat()
+    elif month:
         if not MONTH_RE.match(month):
             raise HTTPException(400, "Invalid month format (YYYY-MM)")
-        query["dataDate"] = {"$regex": f"^{month}"}
+        query["dataDate"] = _month_range(month)
     cursor = _db()["reports"].find(query, {"_id": 0, "raw": 0, "usage": 0}).sort("createdAt", -1)
     return await cursor.to_list(length=max(1, min(limit, 400)))
 
@@ -434,26 +499,39 @@ async def performance(date_str: str):
     """Daily / month-to-date / year-to-date performance report for one date."""
     on = _check_date(date_str)
     fy = calc.fiscal_year(on)
-    entries = await _entries_between(date(fy, 4, 1), on)
-    return calc.performance_report(entries, await _config(fy), on)
+    entries, config = await asyncio.gather(_entries_between(date(fy, 4, 1), on), _config(fy))
+    return calc.performance_report(entries, config, on)
 
 
 @app.get("/api/analytics")
 async def get_analytics(on: Optional[str] = None):
     """Trends and things to look at for the Home screen (analytics.py), for
     `on` or by default the latest day with generation data."""
-    day = _check_date(on) if on else None
     today = _today()
-    latest = await _latest_data_date()
-    if latest is None:
-        return analytics.empty(today)
-    day = day or latest
-    fy = calc.fiscal_year(day)
-    # The trend windows need LOOKBACK_DAYS of history; month and year progress
-    # and the stock roll-forward need the whole fiscal year so far.
-    start = min(day - timedelta(days=analytics.LOOKBACK_DAYS), date(fy, 4, 1))
-    entries = await _entries_between(start, day)
-    return analytics.analytics(entries, await _config(fy), day, today, latest=latest)
+
+    def window(day: date) -> tuple[date, date]:
+        # The trend windows need LOOKBACK_DAYS of history; month and year
+        # progress and the stock roll-forward need the whole fiscal year so far.
+        return min(day - timedelta(days=analytics.LOOKBACK_DAYS), date(calc.fiscal_year(day), 4, 1)), day
+
+    if on:
+        # The day is known, so all three reads go out at once.
+        day = _check_date(on)
+        latest, entries, config = await asyncio.gather(
+            _latest_data_date(), _entries_between(*window(day)), _config(calc.fiscal_year(day)))
+        if latest is None:
+            return analytics.empty(today)
+    else:
+        # The day is the latest with data. Its fiscal year is nearly always
+        # today's, so that year's config is read alongside.
+        latest, config = await asyncio.gather(_latest_data_date(), _config(calc.fiscal_year(today)))
+        if latest is None:
+            return analytics.empty(today)
+        day = latest
+        if calc.fiscal_year(day) != config["fy"]:
+            config = await _config(calc.fiscal_year(day))
+        entries = await _entries_between(*window(day))
+    return analytics.analytics(entries, config, day, today, latest=latest)
 
 
 @app.get("/api/config/{fy}")

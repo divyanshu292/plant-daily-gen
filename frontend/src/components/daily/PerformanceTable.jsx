@@ -52,11 +52,9 @@ function toSections(rows) {
     .filter((s) => s.rows.length)
     .map((s) => ({
       ...s,
-      rows: s.rows.map((row, i) => {
+      rows: s.rows.map((row) => {
         const sub = row.label.startsWith('- ');
-        // "Forced outage h:mm" then "Forced outage %": the second line only needs its unit.
-        const cont = i > 0 && s.rows[i - 1].label === row.label;
-        return { row, sub, cont, label: sub ? row.label.slice(2) : row.label };
+        return { row, sub, label: sub ? row.label.slice(2) : row.label };
       }),
     }));
 }
@@ -78,19 +76,15 @@ const TOP_2 = 'top-[calc(var(--sticky-top,3.5rem)_+_59px)]';
 const TOP_WIDE_2 = 'top-[calc(var(--sticky-top,3.5rem)_+_2.25rem)]';
 
 function RowLabel({ item, className }) {
-  const { row, sub, cont, label } = item;
+  const { row, sub, label } = item;
   return (
     <th scope="row" className={cn('py-2.5 pr-2 text-left align-baseline font-normal leading-snug [overflow-wrap:anywhere]', className)}>
-      {cont ? (
-        <span className={cn('text-[11px] text-muted-foreground', sub && 'pl-3')}>{row.unit}</span>
-      ) : (
-        <span className={cn('block', sub && 'pl-3 text-muted-foreground')}>
-          {label}
-          {/* The space lets a long label wrap before its unit. */}
-          {row.unit && ' '}
-          {row.unit && <span className="ml-0.5 whitespace-nowrap text-[11px] text-muted-foreground">{row.unit}</span>}
-        </span>
-      )}
+      <span className={cn('block', sub && 'pl-3 text-muted-foreground')}>
+        {label}
+        {/* The space lets a long label wrap before its unit. */}
+        {row.unit && ' '}
+        {row.unit && <span className="ml-0.5 whitespace-nowrap text-[11px] text-muted-foreground">{row.unit}</span>}
+      </span>
     </th>
   );
 }
@@ -136,10 +130,10 @@ function PeriodTable({ sections, hasData, period, onPeriod, coverage }) {
             </th>
           </tr>
           {s.rows.map((item, i) => {
-            const line = i > 0 && !item.cont && 'border-t border-border/60';
+            const line = i > 0 && 'border-t border-border/60';
             return (
               <tr key={item.row.key}>
-                <RowLabel item={item} className={cn('w-full', line, item.cont && 'pt-0')} />
+                <RowLabel item={item} className={cn('w-full', line)} />
                 {UNITS.map((u) => {
                   const c = cellValue(item.row, u.key, period, hasData);
                   return (
@@ -148,7 +142,6 @@ function PeriodTable({ sections, hasData, period, onPeriod, coverage }) {
                       className={cn(
                         'whitespace-nowrap py-2.5 pl-2 text-right align-baseline text-[clamp(12px,3.35vw,13px)] tabular',
                         line,
-                        item.cont && 'pt-0',
                         u.key === 'stn' ? 'font-medium' : 'text-foreground/80',
                         c?.empty && 'font-normal text-muted-foreground/50'
                       )}
@@ -218,10 +211,10 @@ function FullTable({ sections, hasData }) {
             </th>
           </tr>
           {s.rows.map((item, i) => {
-            const line = i > 0 && !item.cont && 'border-t border-border/60';
+            const line = i > 0 && 'border-t border-border/60';
             return (
               <tr key={item.row.key} className="group">
-                <RowLabel item={item} className={cn('min-w-[11rem] group-hover:bg-muted/40 xl:min-w-[15rem]', line, item.cont && 'pt-0')} />
+                <RowLabel item={item} className={cn('min-w-[11rem] group-hover:bg-muted/40 xl:min-w-[15rem]', line)} />
                 {UNITS.flatMap((u) =>
                   PERIODS.map((p) => {
                     const c = cellValue(item.row, u.key, p.value, hasData);
@@ -232,7 +225,6 @@ function FullTable({ sections, hasData }) {
                           'whitespace-nowrap py-2.5 text-right align-baseline tabular group-hover:bg-muted/40',
                           p.value === 'day' ? 'pl-5 font-medium xl:pl-8' : 'pl-3 text-foreground/75 xl:pl-4',
                           line,
-                          item.cont && 'pt-0',
                           c?.empty && 'font-normal text-muted-foreground/50'
                         )}
                       >

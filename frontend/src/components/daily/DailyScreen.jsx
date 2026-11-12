@@ -35,7 +35,7 @@ export function DailyScreen({ arg, health, navigate }) {
   }, [date, health.data, health.error, fallback, navigate]);
 
   const perf = useApiData(date ? `/performance/${date}` : null, { keep: true });
-  const reports = useApiData(date ? `/reports?month=${date.slice(0, 7)}` : null);
+  const reports = useApiData(date ? `/reports?date=${date}` : null);
 
   const report = useMemo(() => {
     const forDay = (reports.data || []).filter((r) => r.dataDate === date);

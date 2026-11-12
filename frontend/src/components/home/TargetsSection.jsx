@@ -89,7 +89,7 @@ function TargetProgress({ p }) {
             )}
           </span>
           <span className="shrink-0">
-            {pace != null && (p.gen >= p.expected ? `${mu(p.gen - p.expected)} ahead` : `${mu(p.expected - p.gen)} behind`)}
+            {pace != null && (p.gen >= p.expected ? `${mu(p.gen - p.expected)} MU ahead` : `${mu(p.expected - p.gen)} MU behind`)}
           </span>
         </div>
       )}
