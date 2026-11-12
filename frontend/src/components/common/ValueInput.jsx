@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, CircleAlert, Loader2 } from 'lucide-react';
+import { CheckIcon, CircleNotchIcon, WarningCircleIcon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { parseInput, toInputText } from '@/lib/format';
 
@@ -61,6 +61,7 @@ export function ValueInput({
       <input
         type="text"
         inputMode={kind === 'number' ? 'decimal' : kind === 'count' ? 'numeric' : undefined}
+        enterKeyHint="done"
         autoComplete="off"
         value={draft}
         placeholder={placeholder}
@@ -85,7 +86,8 @@ export function ValueInput({
           }
         }}
         className={cn(
-          'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm tabular transition-colors',
+          // 16 px text below md: iOS zooms the page into any smaller input.
+          'h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base tabular transition-colors md:h-10 md:text-sm',
           kind === 'text' ? 'text-left' : 'text-right',
           showStatus && 'pr-8',
           'placeholder:text-muted-foreground/40 hover:border-foreground/30',
@@ -98,9 +100,9 @@ export function ValueInput({
       />
       {showStatus && (
         <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
-          {status === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          {status === 'saved' && <Check className="h-3.5 w-3.5 text-foreground" />}
-          {status === 'error' && <CircleAlert className="h-3.5 w-3.5 text-attention" />}
+          {status === 'saving' && <CircleNotchIcon weight="bold" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          {status === 'saved' && <CheckIcon weight="bold" className="h-3.5 w-3.5 text-foreground" />}
+          {status === 'error' && <WarningCircleIcon weight="fill" className="h-3.5 w-3.5 text-attention" />}
         </span>
       )}
       {invalid && <div className="mt-1 text-[11px] text-attention">{HINTS[kind] || 'Not valid'}</div>}

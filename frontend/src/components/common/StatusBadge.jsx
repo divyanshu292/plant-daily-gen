@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 const STYLES = {
@@ -21,7 +21,7 @@ export function StatusBadge({ status, className }) {
         className
       )}
     >
-      {s.spin && <Loader2 className="h-3 w-3 animate-spin" />}
+      {s.spin && <CircleNotchIcon weight="bold" className="h-3 w-3 animate-spin" />}
       {s.label}
     </span>
   );

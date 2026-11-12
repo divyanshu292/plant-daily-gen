@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- TTPS: two cooling towers, one per 210 MW unit. Full bleed so it also works as a maskable icon. -->
+  <rect width="512" height="512" fill="#000"/>
+  <g fill="#fff" opacity=".45">
+    <circle cx="176" cy="132" r="22"/><circle cx="204" cy="122" r="28"/><circle cx="232" cy="134" r="18"/>
+    <circle cx="308" cy="132" r="22"/><circle cx="336" cy="122" r="28"/><circle cx="364" cy="134" r="18"/>
+  </g>
+  <g fill="#fff">
+    <path d="M128 392 Q186 262 150 168 H230 Q194 262 252 392 Z"/>
+    <path d="M260 392 Q318 262 282 168 H362 Q326 262 384 392 Z"/>
+  </g>
+  <rect x="112" y="404" width="288" height="8" rx="4" fill="#fff" opacity=".45"/>
+</svg>

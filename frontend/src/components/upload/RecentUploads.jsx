@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Loader2, RotateCw } from 'lucide-react';
+import { ArrowClockwiseIcon, CaretRightIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Notice } from '@/components/common/Notice';
@@ -17,7 +17,7 @@ export function RecentUploads({ reports, onOpen }) {
   return (
     <section className="space-y-3">
       <SectionTitle title="Recent uploads" hint="Open one to see what was read, or to finish a review.">
-        {reports.loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {reports.loading && <CircleNotchIcon weight="bold" className="h-4 w-4 animate-spin text-muted-foreground" />}
       </SectionTitle>
 
       {reports.error && (
@@ -26,7 +26,7 @@ export function RecentUploads({ reports, onOpen }) {
           title="Could not load recent uploads"
           action={
             <Button variant="outline" size="sm" onClick={reports.reload}>
-              <RotateCw />
+              <ArrowClockwiseIcon weight="bold" />
               Try again
             </Button>
           }
@@ -62,7 +62,7 @@ export function RecentUploads({ reports, onOpen }) {
                 {fmtDateTime(r.createdAt)}
                 {r.confirmedAt && <div>reviewed</div>}
               </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <CaretRightIcon weight="bold" className="h-4 w-4 shrink-0 text-muted-foreground" />
             </button>
           ))}
         </Card>

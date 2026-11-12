@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Check, ChevronDown, TriangleAlert, X } from 'lucide-react';
+import { CaretDownIcon, CheckCircleIcon, CheckIcon, WarningIcon, XCircleIcon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 export function CheckRow({ check }) {
   const warn = check.severity !== 'error';
-  const Icon = check.ok ? Check : warn ? TriangleAlert : X;
+  const Icon = check.ok ? CheckIcon : warn ? WarningIcon : XCircleIcon;
   return (
     <li className="flex gap-2.5 py-2">
       <Icon
@@ -47,9 +47,9 @@ export function ChecksSummary({ checks = [], note }) {
         className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/50"
       >
         {failed.length === 0 ? (
-          <Check className="h-4 w-4 shrink-0" />
+          <CheckCircleIcon weight="fill" className="h-4 w-4 shrink-0" />
         ) : (
-          <TriangleAlert className="h-4 w-4 shrink-0 text-attention" />
+          <WarningIcon weight="fill" className="h-4 w-4 shrink-0 text-attention" />
         )}
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">{title}</div>
@@ -58,7 +58,7 @@ export function ChecksSummary({ checks = [], note }) {
           </div>
         </div>
         <span className="hidden text-xs text-muted-foreground sm:inline">{open ? 'Hide' : 'Show all'}</span>
-        <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
+        <CaretDownIcon weight="bold" className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
       </button>
       {(open || failed.length > 0) && (
         <ul className="divide-y divide-border/60 border-t border-border px-4">

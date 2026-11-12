@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
-// ---- hash route: #/upload, #/daily/2026-11-03, #/data/2026-11, #/data/2026-11-03 ----
+// ---- hash route: #/ (home), #/upload, #/daily/2026-11-03, #/data/2026-11, #/data/2026-11-03 ----
 
-const SCREENS = ['upload', 'daily', 'data'];
+export const SCREENS = ['home', 'upload', 'daily', 'data'];
 
+/** Anything that is not a known screen (#/, #/home, #/whatever) is the home screen. */
 function parseHash(hash) {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
-  const screen = SCREENS.includes(parts[0]) ? parts[0] : 'upload';
-  return { screen, arg: parts[1] || null, hash: `#/${parts.join('/') || 'upload'}` };
+  if (!SCREENS.includes(parts[0])) return { screen: 'home', arg: null, hash: '#/home' };
+  return { screen: parts[0], arg: parts[1] || null, hash: `#/${parts.join('/')}` };
 }
 
 export function useHashRoute() {
@@ -28,7 +29,7 @@ export function useHashRoute() {
   const navigate = useCallback((path, { replace = false } = {}) => {
     const hash = `#/${path.replace(/^[#/]+/, '')}`;
     if (hash === window.location.hash) return;
-    const from = window.location.hash || '#/upload';
+    const from = window.location.hash || '#/home';
     if (replace) window.history.replaceState(window.history.state, '', hash);
     else window.history.pushState({ from }, '', hash);
     setRoute(parseHash(hash));

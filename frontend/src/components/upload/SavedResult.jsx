@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, CalendarDays, FileText, Image as ImageIcon } from 'lucide-react';
+import { ArrowRightIcon, CalendarDotsIcon, FileTextIcon, ImageIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/common/Notice';
 import { ImageViewer, imageKept } from '@/components/common/ImageViewer';
@@ -30,6 +30,9 @@ function savedChanges(report) {
     .filter((c) => differs(c.before, c.after));
 }
 
+/** Full-width, finger-sized on a phone; compact in a row from sm up. */
+const ACTION = 'h-11 justify-start px-4 text-sm sm:h-8 sm:justify-center sm:px-3 sm:text-xs';
+
 export function SavedResult({ report, navigate }) {
   const [viewing, setViewing] = useState(false);
   const day = report.dataDate;
@@ -54,7 +57,7 @@ export function SavedResult({ report, navigate }) {
               {changes.map((c) => (
                 <li key={c.field} className="tabular">
                   <span className="text-foreground">{fieldLabel(c.field)}:</span> {fmtField(c.field, c.before)}{' '}
-                  <ArrowRight className="inline h-3 w-3" /> <strong>{fmtField(c.field, c.after)}</strong>
+                  <ArrowRightIcon weight="bold" className="inline h-3 w-3" /> <strong>{fmtField(c.field, c.after)}</strong>
                 </li>
               ))}
             </ul>
@@ -69,7 +72,7 @@ export function SavedResult({ report, navigate }) {
           title={`${missing.length === 1 ? '1 earlier day' : `${missing.length} earlier days`} of ${monthLabel(day.slice(0, 7))} still ${missing.length === 1 ? 'has' : 'have'} no data`}
           action={
             <Button variant="outline" size="sm" onClick={() => navigate(`data/${day.slice(0, 7)}`)}>
-              <CalendarDays />
+              <CalendarDotsIcon weight="bold" />
               See the month
             </Button>
           }
@@ -90,18 +93,18 @@ export function SavedResult({ report, navigate }) {
         note={confirmed ? 'Worked out on the values as first read, before your corrections.' : undefined}
       />
 
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => navigate(`daily/${day}`)}>
-          <FileText />
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
+        <Button variant="outline" size="sm" className={ACTION} onClick={() => navigate(`daily/${day}`)}>
+          <FileTextIcon weight="bold" />
           Daily report for {fmtDate(day, 'short')}
         </Button>
-        <Button variant="outline" size="sm" onClick={() => navigate(`data/${day}`)}>
-          <CalendarDays />
+        <Button variant="outline" size="sm" className={ACTION} onClick={() => navigate(`data/${day}`)}>
+          <CalendarDotsIcon weight="bold" />
           Edit in Data
         </Button>
         {imageKept(report) && (
-          <Button variant="ghost" size="sm" onClick={() => setViewing(true)}>
-            <ImageIcon />
+          <Button variant="ghost" size="sm" className={ACTION} onClick={() => setViewing(true)}>
+            <ImageIcon weight="bold" />
             View page
           </Button>
         )}

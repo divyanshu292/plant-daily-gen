@@ -4,12 +4,13 @@ Daily generation data for Tenughat Thermal Power Station (2 x 210 MW).
 
 Each morning the plant prints a one-page **Daily System Report**. Staff photograph it and upload it here. The backend has Google Gemini transcribe the page, checks the page's own arithmetic, and stores the previous day's figures in MongoDB. It also re-implements the formulas of the plant's Excel workbook (`TTPS DAILY GEN DATA 2026-27.xlsx`), so the site can show daily, month-to-date and year-to-date performance: PLF, availability, specific coal and oil, heat rate, outages, stocks and so on.
 
-- `frontend/`: React + Vite site.
+- `frontend/`: React + Vite site, built for phones first. Four tabs: Home (live generation, targets, things to look at, trends), Upload, Report and Data. It can be installed to the home screen (`public/manifest.webmanifest`).
 - `backend/`: FastAPI API (`main.py`).
   - `extract.py`: prepares the image and calls Gemini.
   - `report_schema.py`: the page as a schema. Every cell is a string.
   - `validate.py`: parses the cells and runs the arithmetic checks.
   - `calc.py`: the workbook's formulas.
+  - `analytics.py`: trends and things to look at for the Home screen (`GET /api/analytics?on=YYYY-MM-DD`, default the latest day with data).
   - `workbook_import.py`: reads history from the workbook.
 
 ## Upload flow

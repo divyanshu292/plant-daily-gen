@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
-import { FileSpreadsheet, Loader2 } from 'lucide-react';
+import { CircleNotchIcon, FileXlsIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Notice } from '@/components/common/Notice';
 import { MicroLabel } from '@/components/common/Text';
 import { api } from '@/lib/api';
@@ -29,22 +28,25 @@ export function ImportWorkbook({ onImported }) {
   const r = state.result;
 
   return (
-    <Card className="space-y-4 p-4 md:p-6">
+    <section className="space-y-4 border-t border-border pt-8" aria-labelledby="import-workbook">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <MicroLabel>Import workbook</MicroLabel>
-          <p className="max-w-xl text-sm text-muted-foreground">
+        <div className="space-y-1.5">
+          <MicroLabel as="h2" id="import-workbook">
+            Import workbook
+          </MicroLabel>
+          <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
             One-time load of earlier days from the plant&apos;s Excel workbook (the DAILY DATA sheet, .xlsx). Days already
             read from a report page keep their values; the workbook only fills in what is missing, such as GCV and trips.
           </p>
         </div>
         <Button
           variant="outline"
-          className="shrink-0"
+          size="touch"
+          className="w-full shrink-0 sm:w-auto"
           disabled={state.status === 'working'}
           onClick={() => inputRef.current?.click()}
         >
-          {state.status === 'working' ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />}
+          {state.status === 'working' ? <CircleNotchIcon weight="bold" className="animate-spin" /> : <FileXlsIcon weight="bold" />}
           {state.status === 'working' ? 'Importing' : 'Choose .xlsx file'}
         </Button>
         <input
@@ -59,9 +61,7 @@ export function ImportWorkbook({ onImported }) {
         />
       </div>
 
-      {state.status === 'working' && (
-        <p className="text-sm text-muted-foreground">Reading {state.name}…</p>
-      )}
+      {state.status === 'working' && <p className="text-sm text-muted-foreground">Reading {state.name}…</p>}
       {state.status === 'error' && (
         <Notice tone="error" title={`${state.name} was not imported`}>
           {state.error}
@@ -81,6 +81,6 @@ export function ImportWorkbook({ onImported }) {
           {r.days - r.added - r.updated > 0 && <>; {r.days - r.added - r.updated} already had every value the workbook carries</>}.
         </Notice>
       )}
-    </Card>
+    </section>
   );
 }

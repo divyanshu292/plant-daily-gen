@@ -1,4 +1,4 @@
-import { RotateCw, X } from 'lucide-react';
+import { ArrowClockwiseIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Notice } from '@/components/common/Notice';
@@ -78,12 +78,12 @@ export function UploadItem({ item, ahead, queue, navigate }) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0"
+            className="-my-1 -mr-2 h-10 w-10 shrink-0 md:my-0 md:mr-0 md:h-8 md:w-8"
             onClick={() => queue.remove(item.key)}
             aria-label={item.state === 'queued' ? 'Cancel this upload' : 'Close'}
             title={item.state === 'queued' ? 'Cancel this upload' : 'Close'}
           >
-            <X />
+            <XIcon weight="bold" />
           </Button>
         )}
       </div>
@@ -98,7 +98,7 @@ export function UploadItem({ item, ahead, queue, navigate }) {
             </Notice>
             {(item.file || item.reloadId) && (
               <Button variant="outline" size="sm" onClick={() => queue.retry(item.key)}>
-                <RotateCw />
+                <ArrowClockwiseIcon weight="bold" />
                 Try again
               </Button>
             )}

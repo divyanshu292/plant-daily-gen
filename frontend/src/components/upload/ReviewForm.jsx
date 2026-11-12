@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Loader2, Save, X } from 'lucide-react';
+import { CheckIcon, CircleNotchIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/common/Notice';
 import { ValueInput } from '@/components/common/ValueInput';
@@ -54,7 +54,7 @@ function ReviewRow({ row, values, original, setValue, raw, flagged, flaggedPrint
           {label && <SlotLabel always={!!slot.sub}>{label}, on page</SlotLabel>}
           <div
             className={cn(
-              'flex h-10 items-center justify-end rounded-md border border-dashed border-border px-3 text-sm text-muted-foreground tabular',
+              'flex h-11 items-center justify-end rounded-md border border-dashed border-border px-2.5 text-base text-muted-foreground tabular md:h-10 md:px-3 md:text-sm',
               flaggedPrinted.has(slot.cell) && 'border-attention/70 text-foreground'
             )}
             title="Printed on the page; not stored"
@@ -76,6 +76,7 @@ function ReviewRow({ row, values, original, setValue, raw, flagged, flaggedPrint
           kind={kind}
           flagged={flagged.has(slot.field) && !edited}
           onCommit={(v) => setValue(slot.field, v)}
+          inputClassName="h-11 px-2.5 text-base md:h-10 md:px-3 md:text-sm"
           aria-label={`${row.label}${label ? `, ${label}` : ''}`}
         />
         {edited && (
@@ -96,7 +97,7 @@ function ReviewRow({ row, values, original, setValue, raw, flagged, flaggedPrint
         </div>
         {status && (
           <div className={cn('flex items-center gap-1 text-[11px] tabular', status.ok ? 'text-muted-foreground' : 'text-attention')}>
-            {status.ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+            {status.ok ? <CheckIcon weight="bold" className="h-3 w-3" /> : <XIcon weight="bold" className="h-3 w-3" />}
             {status.ok ? 'Adds up' : status.text}
           </div>
         )}
@@ -213,7 +214,7 @@ export function ReviewForm({ report, onConfirmed }) {
                 value={dataDate}
                 onChange={(e) => setDataDate(e.target.value)}
                 className={cn(
-                  'h-10 rounded-md border border-input bg-background px-3 text-sm tabular [color-scheme:light] dark:[color-scheme:dark] sm:w-44',
+                  'h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base tabular [color-scheme:light] dark:[color-scheme:dark] sm:w-44 md:h-10 md:text-sm',
                   !dataDate && 'border-attention ring-1 ring-attention'
                 )}
               />
@@ -242,15 +243,16 @@ export function ReviewForm({ report, onConfirmed }) {
             ))}
           </div>
 
-          <div className="sticky bottom-0 -mx-1 mt-4 border-t border-border bg-card/95 px-1 pb-1 pt-4 backdrop-blur">
+          {/* Sits on top of the phone tab bar, at the very bottom from md up. */}
+          <div className="sticky bottom-[var(--tabbar-h)] -mx-1 mt-4 border-t border-border bg-card/95 px-1 pb-3 pt-3 backdrop-blur md:pb-1 md:pt-4">
             {error && (
               <Notice tone="error" className="mb-3" title="Not saved">
                 {error}
               </Notice>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <Button size="lg" onClick={save} disabled={saving}>
-                {saving ? <Loader2 className="animate-spin" /> : <Save />}
+              <Button size="lg" className="h-12 w-full text-base sm:h-10 sm:w-auto sm:text-sm" onClick={save} disabled={saving}>
+                {saving ? <CircleNotchIcon weight="bold" className="animate-spin" /> : <CheckIcon weight="bold" />}
                 {saving ? 'Saving' : dataDate ? `Save figures for ${fmtDate(dataDate, 'short')}` : 'Save'}
               </Button>
               <span className="hidden text-xs text-muted-foreground sm:inline">

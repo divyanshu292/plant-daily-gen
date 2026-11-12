@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { Loader2, RotateCw, Upload } from 'lucide-react';
+import { ArrowClockwiseIcon, CircleNotchIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/common/Notice';
-import { PageHeading, SectionTitle } from '@/components/common/Text';
+import { MicroLabel, SectionTitle } from '@/components/common/Text';
 import { StatTile } from '@/components/common/StatTile';
-import { FyMonthPicker } from '@/components/data/FyMonthPicker';
+import { STICKY_TOP } from '@/components/common/sticky';
+import { FyMonthPicker, FySelect } from '@/components/data/FyMonthPicker';
 import { CoverageCalendar } from '@/components/data/CoverageCalendar';
 import { MonthTable } from '@/components/data/MonthTable';
 import { DayDetail } from '@/components/data/DayDetail';
 import { ImportWorkbook } from '@/components/data/ImportWorkbook';
 import { useApiData } from '@/lib/hooks';
 import { add, dayStatus } from '@/lib/entries';
-import { fmtDayList, fmtNum, fyLabel, fyOfMonth, isIsoDate, isMonth, localTodayIso, monthDays, monthLabel } from '@/lib/format';
+import { fmtDayList, fmtNum, isIsoDate, isMonth, localTodayIso, monthDays, monthLabel } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
   const today = health.data?.today || localTodayIso();
@@ -40,6 +42,7 @@ export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
 
   const pick = useCallback((iso) => navigate(`data/${iso}`), [navigate]);
   const close = useCallback(() => backTo(`data/${month}`), [backTo, month]);
+  const toMonth = useCallback((m) => navigate(`data/${m}`, { replace: true }), [navigate]);
 
   const onSaved = useCallback(
     (date, field, updated) => {
@@ -66,18 +69,25 @@ export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
   const loaded = !!entries.data;
 
   return (
-    <div className="space-y-8 md:space-y-10">
-      <PageHeading eyebrow={`Stored data · ${fyLabel(fyOfMonth(month))}`} title={monthLabel(month)} />
-
-      <FyMonthPicker month={month} todayMonth={today.slice(0, 7)} onChange={(m) => navigate(`data/${m}`, { replace: true })} />
+    <div className={cn('space-y-10', STICKY_TOP)}>
+      <section className="space-y-4 md:space-y-6">
+        <div className="space-y-2">
+          <MicroLabel>Stored data</MicroLabel>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <h1 className="text-3xl font-semibold leading-[1.05] tracking-tight md:text-5xl">{monthLabel(month)}</h1>
+            <FySelect month={month} onChange={toMonth} todayMonth={today.slice(0, 7)} />
+          </div>
+        </div>
+        <FyMonthPicker month={month} todayMonth={today.slice(0, 7)} onChange={toMonth} fySelect={false} />
+      </section>
 
       {entries.error && (
         <Notice
           tone="error"
           title="Could not load this month"
           action={
-            <Button variant="outline" size="sm" onClick={entries.reload}>
-              <RotateCw />
+            <Button variant="outline" size="touch" onClick={entries.reload}>
+              <ArrowClockwiseIcon weight="bold" />
               Try again
             </Button>
           }
@@ -88,20 +98,16 @@ export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
 
       {!loaded && entries.loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading {monthLabel(month)}
+          <CircleNotchIcon weight="bold" className="h-4 w-4 animate-spin" /> Loading {monthLabel(month)}
         </div>
       )}
 
       {loaded && (
         <>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]">
-            <section className="space-y-3">
-              <SectionTitle title="Coverage" hint="Select a day to see or change its values." />
-              <CoverageCalendar month={month} byDate={byDate} today={today} selected={day} onPick={pick} />
-            </section>
-
-            <div className="space-y-3 lg:pt-8">
-              <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)] lg:gap-12">
+            {/* Phones: the month's figures first, then the calendar. Wide screens: calendar on the left. */}
+            <div className="space-y-5 lg:col-start-2 lg:row-start-1 lg:pt-9">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-7">
                 <StatTile
                   label="Days with data"
                   value={stats.withData}
@@ -126,8 +132,8 @@ export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
                   tone="attention"
                   title={`No data for ${stats.missing.length} day${stats.missing.length === 1 ? '' : 's'}`}
                   action={
-                    <Button variant="outline" size="sm" onClick={() => navigate('upload')}>
-                      <Upload />
+                    <Button variant="outline" size="touch" className="bg-transparent" onClick={() => navigate('upload')}>
+                      <UploadSimpleIcon weight="bold" />
                       Upload pages
                     </Button>
                   }
@@ -137,12 +143,17 @@ export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
                 </Notice>
               )}
             </div>
+
+            <section className="space-y-4 lg:col-start-1 lg:row-start-1">
+              <SectionTitle title="Coverage" hint="Select a day to see or change its values." />
+              <CoverageCalendar month={month} byDate={byDate} today={today} selected={day} onPick={pick} />
+            </section>
           </div>
 
-          <section className="space-y-3">
+          <section id="month-days" className="space-y-2">
             <SectionTitle
               title={`Days · ${monthLabel(month, 'short')}`}
-              hint="Coal, oil, DM water, backing down, outage and H₂ are Unit 1 + Unit 2. Outage is forced plus planned. Select a row to edit."
+              hint="Coal, oil, DM water, backing down (BD), outage and H₂ are Unit 1 + Unit 2. Outage is forced plus planned. Select a row to edit."
             />
             <MonthTable month={month} byDate={byDate} today={today} selected={day} onPick={pick} />
           </section>

@@ -97,6 +97,33 @@ def _stock(by_date: dict[str, dict], anchors: list[dict], on: date,
     return {"value": value, "asOf": anchor_date, "source": "report" if printed_today else "computed"}
 
 
+def latest_gcv(by_date: dict[str, dict], on: date, since: date) -> dict | None:
+    """Coal GCV for the heat rate of `on`: the day before's, like the workbook.
+    The lab figure arrives late, so fall back to the most recent one known,
+    looking no further back than `since`."""
+    d = on - timedelta(days=1)
+    while d >= since:
+        e = by_date.get(d.isoformat())
+        if e and e.get("gcv"):
+            return {"value": float(e["gcv"]), "date": d.isoformat()}
+        d -= timedelta(days=1)
+    return None
+
+
+def heat_input(coal: float, oil: float, gcv: float) -> float:
+    """Heat fired, scaled so that heat_input / (10 * gen in MU) is kcal/kWh.
+    Coal in MT at `gcv` kcal/kg, oil in KL. The 0.01 * coal term is the
+    workbook's own and is kept as is."""
+    return (coal * gcv / 100) + (oil * OIL_KCAL_PER_LITRE / 100) - (0.01 * coal / 100)
+
+
+def heat_rate(coal: float, oil: float, gen: float, gcv: float | None) -> float | None:
+    """Heat rate in kcal/kWh; None without a GCV or without generation."""
+    if gcv is None or gen == 0:
+        return None
+    return heat_input(coal, oil, gcv) / (gen * 10)
+
+
 def performance_report(entries: list[dict], config: dict, on: date) -> dict:
     """Daily, month-to-date and year-to-date figures for `on`.
 
@@ -165,22 +192,10 @@ def performance_report(entries: list[dict], config: dict, on: date) -> dict:
     running = {c: {s: hours_base(c, s) - fo[c][s] - po[c][s] for s in scopes} for c in ("u1", "u2")}
     running["stn"] = None  # hours of two units do not add up to a meaningful station figure
 
-    # Heat rate uses the coal GCV of the day before, like the workbook. The lab
-    # figure arrives late, so fall back to the most recent one known.
-    gcv = None
-    d = on - timedelta(days=1)
-    while d >= fy_start:
-        e = by_date.get(d.isoformat())
-        if e and e.get("gcv"):
-            gcv = {"value": float(e["gcv"]), "date": d.isoformat()}
-            break
-        d -= timedelta(days=1)
+    gcv = latest_gcv(by_date, on, fy_start)
 
-    def heat_rate(c: str, s: str) -> float | None:
-        if gcv is None or gen[c][s] == 0:
-            return None
-        return ((coal[c][s] * gcv["value"] / 100) + (oil[c][s] * OIL_KCAL_PER_LITRE / 100)
-                - (0.01 * coal[c][s] / 100)) / (gen[c][s] * 10)
+    def heat_rate_cell(c: str, s: str) -> float | None:
+        return heat_rate(coal[c][s], oil[c][s], gen[c][s], gcv["value"] if gcv else None)
 
     # Capacity not used while the unit was available. The workbook subtracts
     # fractions from 100 here (always giving about 99); this is the intended
@@ -255,7 +270,7 @@ def performance_report(entries: list[dict], config: dict, on: date) -> dict:
         row("dm", "DM make-up water", "m³", "number", 0, dm),
         row("dmPct", "Make-up", "%", "percent", 2,
             cells(lambda c, s: ratio(dm[c][s] * 100, gen[c][s] * 1000 * STEAM_T_PER_MWH))),
-        row("heatRate", "Heat rate", "kcal/kWh", "number", 0, cells(heat_rate)),
+        row("heatRate", "Heat rate", "kcal/kWh", "number", 0, cells(heat_rate_cell)),
         row("partialLoadingPct", "Partial loading", "%", "percent", 2, partial_pct),
         row("partialLoading", "Partial loading", "MU", "number", 3, partial_mu),
         row("stationLoss", "- due to station problems", "MU", "number", 3,

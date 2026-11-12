@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Image as ImageIcon, Loader2, RotateCw, Upload } from 'lucide-react';
+import { ArrowClockwiseIcon, CalendarDotsIcon, CircleNotchIcon, ImageIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/common/Notice';
-import { PageHeading } from '@/components/common/Text';
+import { MicroLabel } from '@/components/common/Text';
 import { StatTile } from '@/components/common/StatTile';
 import { DateNav } from '@/components/common/DateNav';
+import { STICKY_TOP } from '@/components/common/sticky';
 import { IMAGE_RETENTION_DAYS, ImageViewer, imageKept } from '@/components/common/ImageViewer';
 import { PerformanceTable } from '@/components/daily/PerformanceTable';
 import { apiUrl } from '@/lib/api';
@@ -46,21 +47,36 @@ export function DailyScreen({ arg, health, navigate }) {
   const missingMonth = p?.missing?.month || [];
   const genDay = stationDay(p?.rows, 'gen');
   const plfDay = stationDay(p?.rows, 'plf');
+  const latest = health.data?.latestDate;
 
   return (
-    <div className="space-y-8 md:space-y-10">
-      <PageHeading
-        eyebrow={`Daily performance report${p?.fy ? ` · FY ${p.fy}–${String(p.fy + 1).slice(2)}` : ''}`}
-        title={date ? fmtDate(date, 'long') : 'Daily report'}
-      >
-        {date && <DateNav value={date} onChange={setDate} max={today} className="w-full md:w-auto" />}
-      </PageHeading>
+    <div className={cn('space-y-8 md:space-y-10', STICKY_TOP)}>
+      <section className="space-y-3 md:flex md:items-end md:justify-between md:gap-6 md:space-y-0">
+        <div className="min-w-0 space-y-2">
+          <MicroLabel>
+            Daily report{p?.fy ? ` · FY ${p.fy}–${String(p.fy + 1).slice(2)}` : ''}
+          </MicroLabel>
+          {/* On phones the date navigator below is the title. */}
+          <h1 className="sr-only md:not-sr-only md:text-5xl md:font-semibold md:leading-[1.05] md:tracking-tight">
+            {date ? fmtDate(date, 'long') : 'Daily report'}
+          </h1>
+        </div>
+        {date && <DateNav value={date} onChange={setDate} max={today} className="-mx-1 md:mx-0 md:shrink-0" />}
+        {date && latest && date !== latest && (
+          <div className="flex justify-center md:hidden">
+            <Button variant="ghost" size="touch" className="text-muted-foreground" onClick={() => setDate(latest)}>
+              <CalendarDotsIcon weight="bold" />
+              Latest day with data · {fmtDate(latest, 'short')}
+            </Button>
+          </div>
+        )}
+      </section>
 
-      {date && health.data?.latestDate && date !== health.data.latestDate && (
-        <div className="-mt-4 md:-mt-6">
-          <Button variant="ghost" size="sm" className="-ml-3" onClick={() => setDate(health.data.latestDate)}>
-            <CalendarDays />
-            Go to the latest day with data ({fmtDate(health.data.latestDate, 'short')})
+      {date && latest && date !== latest && (
+        <div className="-mt-6 hidden md:block">
+          <Button variant="ghost" size="sm" className="-ml-3 text-muted-foreground" onClick={() => setDate(latest)}>
+            <CalendarDotsIcon weight="bold" />
+            Go to the latest day with data ({fmtDate(latest, 'short')})
           </Button>
         </div>
       )}
@@ -70,8 +86,8 @@ export function DailyScreen({ arg, health, navigate }) {
           tone="error"
           title="Could not load the report"
           action={
-            <Button variant="outline" size="sm" onClick={perf.reload}>
-              <RotateCw />
+            <Button variant="outline" size="touch" onClick={perf.reload}>
+              <ArrowClockwiseIcon weight="bold" />
               Try again
             </Button>
           }
@@ -82,112 +98,123 @@ export function DailyScreen({ arg, health, navigate }) {
 
       {!p && perf.loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Working out the figures
+          <CircleNotchIcon weight="bold" className="h-4 w-4 animate-spin" /> Working out the figures
         </div>
       )}
 
       {p && (
-        <div className={cn('space-y-8 transition-opacity md:space-y-10', perf.loading && 'opacity-60')}>
-          <div className="space-y-3">
-            {!p.hasData && (
-              <Notice
-                tone="attention"
-                title={`No data is stored for ${fmtDate(date, 'medium')}.`}
-                action={
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => navigate('upload')}>
-                      <Upload />
-                      Upload the page dated {fmtDate(addDays(date, 1), 'short')}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => navigate(`data/${date}`)}>
-                      Enter values by hand
-                    </Button>
-                  </div>
-                }
-              >
-                The day columns are left empty. Month and year figures count this day as zero.
-              </Notice>
-            )}
-            {missingMonth.length > 0 && !(missingMonth.length === 1 && missingMonth[0] === date && !p.hasData) && (
-              <Notice tone="attention" title="Month and year figures are incomplete">
-                No data for {fmtDayList(missingMonth)}
-                {p.missing.year > missingMonth.length && `, and ${p.missing.year - missingMonth.length} more day${p.missing.year - missingMonth.length === 1 ? '' : 's'} earlier in the year`}
-                . Those days count as zero until their pages are uploaded or entered.
-              </Notice>
-            )}
-            {missingMonth.length === 0 && p.missing?.year > 0 && (
-              <Notice tone="attention" title="Year figures are incomplete">
-                {p.missing.year} day{p.missing.year === 1 ? '' : 's'} since 1 April {p.missing.year === 1 ? 'has' : 'have'} no data and
-                count as zero.
-              </Notice>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatTile
-              label="Generation"
-              value={p.hasData ? fmtNum(genDay, 2) : '—'}
-              unit="MU"
-              caption={p.hasData ? `Station, Unit 1 + Unit 2, on ${fmtDate(date, 'short')}` : 'No data for the day'}
-            />
-            <StatTile
-              label="PLF"
-              value={p.hasData ? fmtNum(plfDay, 2) : '—'}
-              unit="%"
-              caption={p.hasData ? 'Station plant load factor for the day' : 'No data for the day'}
-            />
-            <StatTile
-              label="Coal stock"
-              value={p.stocks?.coal ? fmtNum(p.stocks.coal.value, 2) : '—'}
-              unit="MT"
-              caption={stockCaption(p.stocks?.coal)}
-            />
-            <StatTile
-              label="Oil stock"
-              value={p.stocks?.oil ? fmtNum(p.stocks.oil.value, 3) : '—'}
-              unit="KL"
-              caption={stockCaption(p.stocks?.oil)}
-            />
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-muted-foreground">
-              {p.gcv
-                ? <>Heat rate uses GCV <span className="font-medium text-foreground tabular">{fmtNum(p.gcv.value, 0)} kcal/kg</span>, the lab figure for {fmtDate(p.gcv.date, 'medium')}.</>
-                : 'No GCV on record, so heat rate cannot be worked out.'}
+        <div className={cn('space-y-10 transition-opacity', perf.loading && 'opacity-60')}>
+          {(!p.hasData || missingMonth.length > 0 || p.missing?.year > 0) && (
+            <div className="space-y-2">
+              {!p.hasData && (
+                <Notice
+                  tone="attention"
+                  title={`No data is stored for ${fmtDate(date, 'medium')}.`}
+                  action={
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      <Button variant="outline" size="touch" className="bg-transparent" onClick={() => navigate('upload')}>
+                        <UploadSimpleIcon weight="bold" />
+                        Upload the page dated {fmtDate(addDays(date, 1), 'short')}
+                      </Button>
+                      <Button variant="ghost" size="touch" onClick={() => navigate(`data/${date}`)}>
+                        Enter values by hand
+                      </Button>
+                    </div>
+                  }
+                >
+                  The day columns are left empty. Month and year figures count this day as zero.
+                </Notice>
+              )}
+              {missingMonth.length > 0 && !(missingMonth.length === 1 && missingMonth[0] === date && !p.hasData) && (
+                <Notice tone="attention" title="Month and year figures are incomplete">
+                  No data for {fmtDayList(missingMonth)}
+                  {p.missing.year > missingMonth.length && `, and ${p.missing.year - missingMonth.length} more day${p.missing.year - missingMonth.length === 1 ? '' : 's'} earlier in the year`}
+                  . Those days count as zero until their pages are uploaded or entered.
+                </Notice>
+              )}
+              {missingMonth.length === 0 && p.missing?.year > 0 && (
+                <Notice tone="attention" title="Year figures are incomplete">
+                  {p.missing.year} day{p.missing.year === 1 ? '' : 's'} since 1 April {p.missing.year === 1 ? 'has' : 'have'} no data and
+                  count as zero.
+                </Notice>
+              )}
             </div>
-            {report && !imageKept(report) ? (
-              <span className="text-xs text-muted-foreground">
-                The uploaded page was deleted {IMAGE_RETENTION_DAYS} days after upload; its figures are kept.
-              </span>
-            ) : report ? (
-              <Button variant="outline" size="sm" onClick={() => setViewing(true)}>
-                <ImageIcon />
-                View the uploaded page
-                {report.status !== 'saved' && ' (not saved yet)'}
-              </Button>
-            ) : (
-              reports.data && (
+          )}
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-7 lg:grid-cols-4">
+              <StatTile
+                label="Generation"
+                value={p.hasData ? fmtNum(genDay, 2) : '—'}
+                unit="MU"
+                caption={p.hasData ? `Station, Unit 1 + Unit 2, on ${fmtDate(date, 'short')}` : 'No data for the day'}
+              />
+              <StatTile
+                label="PLF"
+                value={p.hasData ? fmtNum(plfDay, 2) : '—'}
+                unit="%"
+                caption={p.hasData ? 'Station plant load factor for the day' : 'No data for the day'}
+              />
+              <StatTile
+                label="Coal stock"
+                value={p.stocks?.coal ? fmtNum(p.stocks.coal.value, 2) : '—'}
+                unit="MT"
+                caption={stockCaption(p.stocks?.coal)}
+              />
+              <StatTile
+                label="Oil stock"
+                value={p.stocks?.oil ? fmtNum(p.stocks.oil.value, 3) : '—'}
+                unit="KL"
+                caption={stockCaption(p.stocks?.oil)}
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs leading-relaxed text-muted-foreground">
+                {p.gcv ? (
+                  <>
+                    Heat rate uses GCV <span className="font-medium text-foreground tabular">{fmtNum(p.gcv.value, 0)} kcal/kg</span>, the lab
+                    figure for {fmtDate(p.gcv.date, 'medium')}.
+                  </>
+                ) : (
+                  'No GCV on record, so heat rate cannot be worked out.'
+                )}
+              </div>
+              {report && !imageKept(report) ? (
                 <span className="text-xs text-muted-foreground">
-                  No page uploaded for this day{p.hasData ? '; its data came from the workbook or by hand.' : '.'}
+                  The uploaded page was deleted {IMAGE_RETENTION_DAYS} days after upload; its figures are kept.
                 </span>
-              )
-            )}
+              ) : report ? (
+                <Button variant="outline" size="touch" className="shrink-0" onClick={() => setViewing(true)}>
+                  <ImageIcon weight="bold" />
+                  View the uploaded page
+                  {report.status !== 'saved' && ' (not saved yet)'}
+                </Button>
+              ) : (
+                reports.data && (
+                  <span className="text-xs text-muted-foreground">
+                    No page uploaded for this day{p.hasData ? '; its data came from the workbook or by hand.' : '.'}
+                  </span>
+                )
+              )}
+            </div>
           </div>
 
           <PerformanceTable report={p} />
 
           {p.notes?.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Notes</div>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <section className="space-y-3">
+              <MicroLabel as="h2">Notes</MicroLabel>
+              <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
                 {p.notes.map((n) => (
-                  <li key={n}>{n}</li>
+                  <li key={n} className="flex gap-2.5">
+                    <span aria-hidden className="mt-[0.6em] h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
+                    <span>{n}</span>
+                  </li>
                 ))}
               </ul>
-            </div>
+            </section>
           )}
-
         </div>
       )}
 
@@ -201,4 +228,3 @@ export function DailyScreen({ arg, health, navigate }) {
     </div>
   );
 }
-

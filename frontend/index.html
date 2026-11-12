@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>TTPS · Daily System Report</title>
+    <meta name="description" content="Tenughat Thermal Power Station (2 × 210 MW): live generation, daily system report and analytics." />
+    <!-- Before the script below, which sets it to match the saved theme. -->
+    <meta name="theme-color" content="#000000" />
     <script>
       (function () {
         try {
@@ -18,8 +21,18 @@
         }
       })();
     </script>
-    <meta name="theme-color" content="#000000" />
-    <link rel="icon" href="data:," />
+
+    <!-- Installed to the home screen: full screen, no browser bars. "default" lets iOS colour the
+         status bar from theme-color (black in dark mode, white in light), so its clock stays readable. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="TTPS" />
+    <meta name="application-name" content="TTPS" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body class="bg-background text-foreground">
     <div id="root"></div>

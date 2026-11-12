@@ -18,6 +18,9 @@ const buttonVariants = cva(
         sm: 'h-8 rounded-md px-3 text-xs',
         lg: 'h-10 rounded-md px-6',
         icon: 'h-9 w-9',
+        // Touch sizes: a 44 px target on phones, the usual size from md up.
+        touch: 'h-11 px-4 md:h-9',
+        'icon-touch': 'h-11 w-11 md:h-9 md:w-9',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

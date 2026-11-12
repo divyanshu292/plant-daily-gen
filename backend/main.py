@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(ROOT_ENV_PATH)
 
+import analytics  # noqa: E402
 import calc  # noqa: E402
 import extract  # noqa: E402
 import workbook_import  # noqa: E402
@@ -201,6 +202,14 @@ async def _config(fy: int) -> dict:
     return calc.merge_config(calc.default_config(fy), stored or {})
 
 
+async def _latest_data_date() -> Optional[date]:
+    """The latest day with generation data, or None if there is none."""
+    doc = await _db()["entries"].find_one(
+        {"$or": [{"u1Gen": {"$ne": None}}, {"u2Gen": {"$ne": None}}]}, {"date": 1}, sort=[("date", -1)]
+    )
+    return date.fromisoformat(doc["date"]) if doc else None
+
+
 @app.get("/")
 async def root():
     return {"name": "TTPS API", "docs": "/docs"}
@@ -210,10 +219,8 @@ async def root():
 async def health():
     latest, database = None, True
     try:
-        doc = await _db()["entries"].find_one(
-            {"$or": [{"u1Gen": {"$ne": None}}, {"u2Gen": {"$ne": None}}]}, {"date": 1}, sort=[("date", -1)]
-        )
-        latest = doc["date"] if doc else None
+        day = await _latest_data_date()
+        latest = day.isoformat() if day else None
     except (HTTPException, PyMongoError):
         database = False
     return {
@@ -429,6 +436,24 @@ async def performance(date_str: str):
     fy = calc.fiscal_year(on)
     entries = await _entries_between(date(fy, 4, 1), on)
     return calc.performance_report(entries, await _config(fy), on)
+
+
+@app.get("/api/analytics")
+async def get_analytics(on: Optional[str] = None):
+    """Trends and things to look at for the Home screen (analytics.py), for
+    `on` or by default the latest day with generation data."""
+    day = _check_date(on) if on else None
+    today = _today()
+    latest = await _latest_data_date()
+    if latest is None:
+        return analytics.empty(today)
+    day = day or latest
+    fy = calc.fiscal_year(day)
+    # The trend windows need LOOKBACK_DAYS of history; month and year progress
+    # and the stock roll-forward need the whole fiscal year so far.
+    start = min(day - timedelta(days=analytics.LOOKBACK_DAYS), date(fy, 4, 1))
+    entries = await _entries_between(start, day)
+    return analytics.analytics(entries, await _config(fy), day, today, latest=latest)
 
 
 @app.get("/api/config/{fy}")

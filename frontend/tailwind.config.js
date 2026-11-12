@@ -77,6 +77,10 @@ export default {
         'fade-in': 'fade-in 0.4s ease-out',
         indeterminate: 'indeterminate 1.6s ease-in-out infinite',
       },
+      transitionTimingFunction: {
+        // A little overshoot, like the iOS tab bar lens settling under a finger.
+        spring: 'cubic-bezier(0.34, 1.3, 0.64, 1)',
+      },
     },
   },
   plugins: [tailwindcssAnimate],

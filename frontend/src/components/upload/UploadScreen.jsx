@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { Info } from 'lucide-react';
+import { InfoIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { PageHeading, SectionTitle } from '@/components/common/Text';
-import LiveGeneration from '@/components/LiveGeneration';
 import { DropZone } from '@/components/upload/DropZone';
+import { PhonePicker } from '@/components/upload/PhonePicker';
 import { UploadItem } from '@/components/upload/UploadItem';
 import { RecentUploads } from '@/components/upload/RecentUploads';
 import { WORKING } from '@/components/upload/useUploadQueue';
@@ -87,10 +87,13 @@ export function UploadScreen({ queue, health, navigate }) {
             Latest day with data: <span className="font-medium text-foreground">{fmtDate(health.data.latestDate, 'weekdayYear')}</span>
           </p>
         )}
-        <DropZone onFiles={add} />
+        <PhonePicker onFiles={add} className="md:hidden" />
+        <div className="hidden md:block">
+          <DropZone onFiles={add} />
+        </div>
         {health.data && !health.data.extraction?.configured && (
           <p className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <InfoIcon weight="fill" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
               The page reader is not configured on this server (no ANTHROPIC_API_KEY). A development server answers with
               sample pages; anywhere else uploads will fail until the key is set.
@@ -126,8 +129,6 @@ export function UploadScreen({ queue, health, navigate }) {
       )}
 
       <RecentUploads reports={reports} onOpen={open} />
-
-      <LiveGeneration />
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { RotateCw } from 'lucide-react';
+import { ArrowClockwiseIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader, TabBar } from '@/components/AppNav';
 import { Notice } from '@/components/common/Notice';
+import { HomeScreen } from '@/components/home/HomeScreen';
 import { UploadScreen } from '@/components/upload/UploadScreen';
 import { useUploadQueue } from '@/components/upload/useUploadQueue';
 import { DailyScreen } from '@/components/daily/DailyScreen';
@@ -37,25 +38,29 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [route.screen]);
 
-  const goScreen = useCallback((screen) => navigate(screen), [navigate]);
+  // Choosing the screen you are already on scrolls back to its top (and to its first view), as native tab bars do.
+  const goScreen = useCallback(
+    (screen) => {
+      if (screen === route.screen) window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (screen !== route.screen || route.arg) navigate(screen);
+    },
+    [navigate, route.screen, route.arg]
+  );
+
+  const nav = { screen: route.screen, onNavigate: goScreen, uploading: queue.busy, pendingReview: queue.pendingReview };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <AppHeader
-        screen={route.screen}
-        onNavigate={goScreen}
-        uploading={queue.busy}
-        pendingReview={queue.pendingReview}
-      />
+    <div className="min-h-dvh bg-background text-foreground">
+      <AppHeader {...nav} />
 
-      <main className="mx-auto max-w-[1280px] space-y-8 px-4 py-6 md:px-8 md:py-12">
+      <main className="pad-x-safe mx-auto max-w-[1280px] space-y-8 pb-[calc(var(--tabbar-h)+1.5rem)] pt-5 md:pb-10 md:pt-12">
         {health.error && (
           <Notice
             tone="error"
             title="Cannot reach the server"
             action={
               <Button variant="outline" size="sm" onClick={health.reload}>
-                <RotateCw />
+                <ArrowClockwiseIcon weight="bold" />
                 Try again
               </Button>
             }
@@ -69,17 +74,20 @@ export default function App() {
           </Notice>
         )}
 
+        {route.screen === 'home' && <HomeScreen health={health} navigate={navigate} />}
         {route.screen === 'upload' && <UploadScreen queue={queue} health={health} navigate={navigate} />}
         {route.screen === 'daily' && <DailyScreen arg={route.arg} health={health} navigate={navigate} />}
         {route.screen === 'data' && (
           <DataScreen arg={route.arg} health={health} navigate={navigate} backTo={backTo} onDataChanged={health.reload} />
         )}
 
-        <footer className="flex flex-col items-start justify-between gap-2 border-t border-border pt-6 text-[11px] uppercase tracking-widest text-muted-foreground sm:flex-row sm:items-center">
+        <footer className="hidden items-center justify-between gap-4 border-t border-border pt-5 text-[10px] uppercase tracking-widest text-muted-foreground md:flex">
           <span>Tenughat Thermal Power Station · TVNL</span>
           {health.data?.latestDate && <span>Latest data · {fmtDate(health.data.latestDate, 'medium')}</span>}
         </footer>
       </main>
+
+      <TabBar {...nav} />
     </div>
   );
 }

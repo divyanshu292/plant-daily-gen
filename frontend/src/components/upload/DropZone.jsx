@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Camera, ImageUp } from 'lucide-react';
+import { CameraIcon, FileArrowUpIcon, ImagesIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -57,7 +57,7 @@ export function DropZone({ onFiles }) {
           over ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground group-hover:text-foreground'
         )}
       >
-        <ImageUp className="h-6 w-6" />
+        <FileArrowUpIcon weight="duotone" className="h-7 w-7" />
       </div>
       <div className="space-y-1.5">
         <div className="text-lg font-semibold tracking-tight md:text-xl">
@@ -77,7 +77,7 @@ export function DropZone({ onFiles }) {
               cameraRef.current?.click();
             }}
           >
-            <Camera />
+            <CameraIcon weight="bold" />
             Take photo
           </Button>
         )}
@@ -89,7 +89,7 @@ export function DropZone({ onFiles }) {
             pickRef.current?.click();
           }}
         >
-          <ImageUp />
+          <ImagesIcon weight="bold" />
           Choose images
         </Button>
       </div>
