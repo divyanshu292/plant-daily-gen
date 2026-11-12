@@ -13,16 +13,19 @@ from PIL import Image
 
 import extract
 import main
-from helpers import PAGE_1, PAGE_2, WORKBOOK, build_workbook, load_report, requires_workbook
+from helpers import PAGE_1, PAGE_2, WORKBOOK, build_workbook, load_report, requires_workbook, sign_in
 
 TODAY = date(2026, 11, 12)
 
 
 @pytest.fixture
 def client(monkeypatch):
+    """Signed in as an admin, who may do everything these tests do. Who may do
+    what is tested in test_auth.py."""
     monkeypatch.setattr(main, "db", AsyncMongoMockClient()["ttps_test"])
     monkeypatch.setattr(main, "_today", lambda: TODAY)
     with TestClient(main.app) as c:  # runs the lifespan (index creation) too
+        sign_in(c, "admin")
         yield c
 
 
@@ -490,13 +493,15 @@ def test_every_query_has_an_index(client):
     run(main._ensure_indexes())
     keys = {name: {tuple(i["key"]): i.get("unique", False)
                    for i in run(main.db[name].index_information()).values()}
-            for name in ("entries", "reports", "config", "report_images")}
+            for name in ("entries", "reports", "config", "report_images", "users")}
     assert keys["entries"][(("date", 1),)] is True
     assert keys["reports"][(("id", 1),)] is True
     assert (("createdAt", -1),) in keys["reports"]
     assert (("dataDate", 1), ("createdAt", -1)) in keys["reports"]
     assert keys["config"][(("fy", 1),)] is True
     assert (("createdAt", 1),) in keys["report_images"]
+    assert keys["users"][(("id", 1),)] is True and keys["users"][(("email", 1),)] is True
+    assert (("sessions.hash", 1),) in keys["users"]
 
 
 def test_reports_for_one_day(client, reader):

@@ -16,7 +16,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 import extract
 import live
 import main
-from helpers import PAGE_1, load_report
+from helpers import PAGE_1, load_report, sign_in
 
 IST = live.IST
 NOW = datetime(2026, 11, 12, 21, 0, tzinfo=IST)
@@ -382,6 +382,9 @@ def api(monkeypatch, portal):
     monkeypatch.setattr(main, "live_cache", {"data": None, "fetched_at": 0.0})
     monkeypatch.delenv("LIVE_RECORD_KEY", raising=False)
     with TestClient(main.app) as c:
+        # The app's routes need a session; /api/live/record does not use it
+        # (test_auth.py checks it works with none).
+        sign_in(c, "admin")
         yield c
 
 

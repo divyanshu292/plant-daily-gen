@@ -7,6 +7,7 @@ import { LatestReport } from '@/components/home/LatestReport';
 import { TargetsSection } from '@/components/home/TargetsSection';
 import { WatchList } from '@/components/home/WatchList';
 import { TrendList } from '@/components/home/TrendList';
+import { useAuth } from '@/lib/auth';
 import { useApiData } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 
@@ -111,19 +112,24 @@ function ReloadFailed({ error, onRetry }) {
 }
 
 function NoData({ navigate }) {
+  const { canEdit } = useAuth();
   return (
     <div className="space-y-4 rounded-lg border border-dashed border-border px-5 py-8 text-center">
       <FileArrowUpIcon weight="duotone" className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
       <div className="space-y-1">
         <div className="text-sm font-medium">No daily reports yet</div>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Upload the first daily performance report to see targets, things to look at and trends here.
+          {canEdit
+            ? 'Upload the first daily performance report to see targets, things to look at and trends here.'
+            : 'Targets, things to look at and trends appear here once the first daily performance report is uploaded.'}
         </p>
       </div>
-      <Button className="h-11" onClick={() => navigate('upload')}>
-        <UploadSimpleIcon weight="bold" aria-hidden="true" />
-        Upload the first report
-      </Button>
+      {canEdit && (
+        <Button className="h-11" onClick={() => navigate('upload')}>
+          <UploadSimpleIcon weight="bold" aria-hidden="true" />
+          Upload the first report
+        </Button>
+      )}
     </div>
   );
 }

@@ -15,8 +15,26 @@ function isJsonResponse(res) {
   return contentType.includes('application/json');
 }
 
+/** Fired on window when the server says the session has ended (see lib/auth.jsx). */
+export const SIGNED_OUT_EVENT = 'ttps:signed-out';
+/** Fired on window on a 403: the person's access changed since the app last asked, so ask again. */
+export const ACCESS_CHANGED_EVENT = 'ttps:access-changed';
+
 export async function apiFetch(path, init) {
   const endpoint = normalizePath(path);
+  // The session cookie is HttpOnly and same-origin (Vite proxy, nginx, Vercel rewrite).
+  const res = await fetchFromBase(endpoint, { credentials: 'same-origin', ...init });
+  // A 401 means the session ended (expired, signed out elsewhere, account removed).
+  // Not on login, where it only means a wrong password.
+  if (res.status === 401 && !endpoint.startsWith('/auth/login')) {
+    window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+  } else if (res.status === 403) {
+    window.dispatchEvent(new Event(ACCESS_CHANGED_EVENT));
+  }
+  return res;
+}
+
+async function fetchFromBase(endpoint, init) {
   if (confirmedBase) return fetch(`${confirmedBase}${endpoint}`, init);
 
   const basesToTry = [preferredBase, ...candidateBases.filter((base) => base !== preferredBase)];

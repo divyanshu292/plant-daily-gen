@@ -10,12 +10,14 @@ import { CoverageCalendar } from '@/components/data/CoverageCalendar';
 import { MonthTable } from '@/components/data/MonthTable';
 import { DayDetail } from '@/components/data/DayDetail';
 import { ImportWorkbook } from '@/components/data/ImportWorkbook';
+import { useAuth } from '@/lib/auth';
 import { useApiData } from '@/lib/hooks';
 import { add, dayStatus } from '@/lib/entries';
 import { fmtDayList, fmtNum, isIsoDate, isMonth, localTodayIso, monthDays, monthLabel } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
+  const { canEdit } = useAuth(); // view-only access: no upload, typing or import here
   const today = health.data?.today || localTodayIso();
   const day = isIsoDate(arg) ? arg : null;
   const month = day ? day.slice(0, 7) : isMonth(arg) ? arg : (health.data?.latestDate || today).slice(0, 7);
@@ -132,20 +134,25 @@ export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
                   tone="attention"
                   title={`No data for ${stats.missing.length} day${stats.missing.length === 1 ? '' : 's'}`}
                   action={
-                    <Button variant="outline" size="touch" className="bg-transparent" onClick={() => navigate('upload')}>
-                      <UploadSimpleIcon weight="bold" />
-                      Upload pages
-                    </Button>
+                    canEdit && (
+                      <Button variant="outline" size="touch" className="bg-transparent" onClick={() => navigate('upload')}>
+                        <UploadSimpleIcon weight="bold" />
+                        Upload pages
+                      </Button>
+                    )
                   }
                 >
-                  {fmtDayList(stats.missing)}. Each day&apos;s figures are on the next morning&apos;s page. You can also select a
-                  day and type the values.
+                  {fmtDayList(stats.missing)}. Each day&apos;s figures are on the next morning&apos;s page.
+                  {canEdit && ' You can also select a day and type the values.'}
                 </Notice>
               )}
             </div>
 
             <section className="space-y-4 lg:col-start-1 lg:row-start-1">
-              <SectionTitle title="Coverage" hint="Select a day to see or change its values." />
+              <SectionTitle
+                title="Coverage"
+                hint={canEdit ? 'Select a day to see or change its values.' : 'Select a day to see its values.'}
+              />
               <CoverageCalendar month={month} byDate={byDate} today={today} selected={day} onPick={pick} />
             </section>
           </div>
@@ -153,19 +160,21 @@ export function DataScreen({ arg, health, navigate, backTo, onDataChanged }) {
           <section id="month-days" className="space-y-2">
             <SectionTitle
               title={`Days · ${monthLabel(month, 'short')}`}
-              hint="Coal, oil, DM water, backing down (BD), outage and H₂ are Unit 1 + Unit 2. Outage is forced plus planned. Select a row to edit."
+              hint={`Coal, oil, DM water, backing down (BD), outage and H₂ are Unit 1 + Unit 2. Outage is forced plus planned. Select a row to ${canEdit ? 'edit' : 'see the day'}.`}
             />
             <MonthTable month={month} byDate={byDate} today={today} selected={day} onPick={pick} />
           </section>
         </>
       )}
 
-      <ImportWorkbook
-        onImported={() => {
-          entries.reload();
-          onDataChanged?.();
-        }}
-      />
+      {canEdit && (
+        <ImportWorkbook
+          onImported={() => {
+            entries.reload();
+            onDataChanged?.();
+          }}
+        />
+      )}
 
       {day && (
         <DayDetail

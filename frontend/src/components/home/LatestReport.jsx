@@ -1,5 +1,6 @@
 import { CaretRightIcon, UploadSimpleIcon, WarningIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth';
 import { addDays, fmtDate, fmtNum, parseIso } from '@/lib/format';
 
 function daysBetween(fromIso, toIso) {
@@ -25,8 +26,9 @@ export function staleness(date, today, staleItem) {
   return { age, stale };
 }
 
-/** "10 Nov · 7.32 MU · PLF 72.6 %", opening that day's report; plus an upload prompt when stale. */
+/** "10 Nov · 7.32 MU · PLF 72.6 %", opening that day's report; plus an upload prompt when stale (for those who can upload). */
 export function LatestReport({ date, today, day, staleItem, navigate }) {
+  const { canEdit } = useAuth();
   const { age, stale } = staleness(date, today, staleItem);
 
   return (
@@ -70,10 +72,12 @@ export function LatestReport({ date, today, day, staleItem, navigate }) {
               )}
             </div>
           </div>
-          <Button variant="outline" className="h-11 w-full shrink-0 border-attention/40 bg-transparent sm:w-auto" onClick={() => navigate('upload')}>
-            <UploadSimpleIcon weight="bold" aria-hidden="true" />
-            Upload report
-          </Button>
+          {canEdit && (
+            <Button variant="outline" className="h-11 w-full shrink-0 border-attention/40 bg-transparent sm:w-auto" onClick={() => navigate('upload')}>
+              <UploadSimpleIcon weight="bold" aria-hidden="true" />
+              Upload report
+            </Button>
+          )}
         </div>
       )}
     </section>

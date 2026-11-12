@@ -16,7 +16,7 @@ from mongomock_motor import AsyncMongoMockClient
 import analytics
 import calc
 import main
-from helpers import requires_workbook
+from helpers import requires_workbook, sign_in
 
 ON = date(2026, 11, 10)
 TOMORROW = ON + timedelta(days=1)  # the normal "today": D's report is printed on D+1
@@ -549,6 +549,7 @@ def client(monkeypatch):
     monkeypatch.setattr(main, "db", AsyncMongoMockClient()["ttps_test"])
     monkeypatch.setattr(main, "_today", lambda: TODAY)
     with TestClient(main.app) as c:
+        sign_in(c, "admin")  # the API needs a session; put_days writes, so an admin
         yield c
 
 

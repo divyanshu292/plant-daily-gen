@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import os
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -28,6 +30,37 @@ requires_workbook = pytest.mark.skipif(not WORKBOOK.exists(), reason=SKIP_REASON
 
 def load_report(name: str) -> DailySystemReport:
     return DailySystemReport.model_validate(json.loads((FIXTURES / name).read_text()))
+
+
+# --- users ---------------------------------------------------------------------------------
+
+USER_PASSWORD = "correct horse battery"
+
+
+@lru_cache(maxsize=1)
+def _password_hash() -> str:
+    """Hashed once: scrypt is slow on purpose, and most tests only need someone signed in."""
+    import auth
+
+    return auth.hash_password(USER_PASSWORD)
+
+
+def add_user(role: str = "admin", email: str | None = None, name: str | None = None) -> dict:
+    """A user put straight into main.db, with the password USER_PASSWORD."""
+    import main
+
+    doc = main._new_user(email or f"{role}@test.local", name or role.replace("_", " ").title(), role,
+                         _password_hash())
+    asyncio.run(main.db["users"].insert_one(doc))
+    return doc
+
+
+def sign_in(client, role: str = "admin", **user) -> dict:
+    """Add a user and sign the TestClient in as them (the session cookie stays on the client)."""
+    doc = add_user(role, **user)
+    response = client.post("/api/auth/login", json={"email": doc["email"], "password": USER_PASSWORD})
+    assert response.status_code == 200, response.text
+    return doc
 
 
 def get_cell(report: DailySystemReport, path: str):

@@ -16,12 +16,12 @@ import certifi
 import httpx
 from bson.binary import Binary
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Header, HTTPException, Query, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ASCENDING, DESCENDING, IndexModel
-from pymongo.errors import OperationFailure, PyMongoError
+from pymongo import ASCENDING, DESCENDING, IndexModel, ReturnDocument
+from pymongo.errors import DuplicateKeyError, OperationFailure, PyMongoError
 
 # Sibling modules are imported by bare name; make that work however the app is launched.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -30,6 +30,7 @@ ROOT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(ROOT_ENV_PATH)
 
 import analytics  # noqa: E402
+import auth  # noqa: E402
 import calc  # noqa: E402
 import extract  # noqa: E402
 import live  # noqa: E402
@@ -117,6 +118,11 @@ _indexed_db = None
 #                  one day or one month, newest first (Daily report)   -> dataDate, createdAt
 #   config         one fiscal year                                     -> fy
 #   live_readings  one IST day by time; the latest reading             -> ts (its TTL index)
+#   users          one user by id (user management)                    -> id
+#                  by email (sign-in; unique, so no duplicate accounts) -> email
+#                  by session (every signed-in request)                -> sessions.hash
+#                  The user list and the "is there a super admin" check
+#                  read the whole collection: a handful of people.
 INDEXES = {
     "entries": [IndexModel([("date", ASCENDING)], unique=True)],
     "reports": [
@@ -125,6 +131,11 @@ INDEXES = {
         IndexModel([("dataDate", ASCENDING), ("createdAt", DESCENDING)]),
     ],
     "config": [IndexModel([("fy", ASCENDING)], unique=True)],
+    "users": [
+        IndexModel([("id", ASCENDING)], unique=True),
+        IndexModel([("email", ASCENDING)], unique=True),
+        IndexModel([("sessions.hash", ASCENDING)]),
+    ],
 }
 
 
@@ -176,6 +187,7 @@ async def lifespan(_app: FastAPI):
     )
     try:
         await _ensure_indexes()
+        await _seed_super_admin()
     except (HTTPException, PyMongoError) as exc:
         # Start anyway so /api/health can say what is wrong.
         print(f"Database not ready at startup: {getattr(exc, 'detail', exc)}")
@@ -212,8 +224,12 @@ app.add_middleware(
 )
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return auth.iso(_utcnow())
 
 
 def _ist_now() -> datetime:
@@ -287,6 +303,104 @@ async def _latest_data_date() -> Optional[date]:
     return date.fromisoformat(doc["date"]) if doc else None
 
 
+# --- who is signed in ----------------------------------------------------------------
+#
+# Every /api route needs a session except /api/health, /api/live/record (it has
+# its own key) and sign-in and sign-out. Each route names what it needs with one
+# of the three dependencies below; tests/test_auth.py fails if one has none.
+
+async def require_user(request: Request) -> dict:
+    """The signed-in user, from the session cookie. Looked up on every request,
+    with no cache, so a role change or a removal takes effect at once."""
+    database = _db()  # without a database, say so (503) rather than "sign in"
+    token = request.cookies.get(auth.COOKIE)
+    if token:
+        hashed = auth.token_hash(token)
+        user = await database["users"].find_one({"sessions.hash": hashed}, {"_id": 0, "activity": 0})
+        if user and auth.session_live(user, hashed, _utcnow()):
+            request.state.session_hash = hashed  # the session a password change keeps
+            return user
+    raise HTTPException(401, "Sign in to continue")
+
+
+async def require_editor(user: dict = Depends(require_user)) -> dict:
+    """Admins and the super admin change plant data; a viewer only reads it."""
+    if user["role"] not in auth.EDITOR_ROLES:
+        raise HTTPException(403, "Your access is view only")
+    return user
+
+
+async def require_super_admin(user: dict = Depends(require_user)) -> dict:
+    if user["role"] != auth.SUPER_ADMIN:
+        raise HTTPException(403, "Only the super admin can manage users")
+    return user
+
+
+async def _log(user_id: str, action: str, text: str) -> None:
+    """Add a line to someone's activity (the newest ACTIVITY_KEPT are kept).
+    A failure is printed, never passed on: the change itself has been made."""
+    try:
+        entry = auth.activity_entry(action, text, _utcnow())
+        await _db()["users"].update_one(
+            {"id": user_id}, {"$push": {"activity": {"$each": [entry], "$slice": -auth.ACTIVITY_KEPT}}})
+    except Exception as exc:  # noqa: BLE001
+        print(f"Could not record activity {action}: {exc}")
+
+
+def _day_label(iso_date: str) -> str:
+    """2026-11-03 -> 3 Nov 2026, for activity lines."""
+    d = date.fromisoformat(iso_date)
+    return f"{d.day} {d:%b %Y}"
+
+
+def _fy_label(fy: int) -> str:
+    return f"{fy}-{(fy + 1) % 100:02d}"
+
+
+def _new_user(email: str, name: str, role: str, password_hash: str, created_by: Optional[dict] = None) -> dict:
+    """A user document. `created_by` is the super admin who onboarded them, or
+    None for a user seeded from the server's settings."""
+    now = _now()
+    activity = []
+    if created_by:
+        activity.append(auth.activity_entry("account_created", f"Account created by {created_by['name']}", _utcnow()))
+    return {
+        "id": uuid.uuid4().hex, "email": email, "name": name, "role": role, "passwordHash": password_hash,
+        "createdAt": now, "createdBy": created_by["id"] if created_by else None, "updatedAt": now,
+        "lastLoginAt": None, "failedLogins": 0, "lockedUntil": None, "sessions": [], "activity": activity,
+    }
+
+
+async def _seed_super_admin() -> None:
+    """Create the super admin from SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD
+    (SUPERADMIN_NAME optional) when there is none yet. Run at startup and before
+    every sign-in, since a serverless host may skip startup. Never changes an
+    existing user. The settings' values are never printed."""
+    users = _db()["users"]
+    if await users.find_one({"role": auth.SUPER_ADMIN}, {"_id": 1}):
+        return
+    email, password = os.getenv("SUPERADMIN_EMAIL"), os.getenv("SUPERADMIN_PASSWORD")
+    if not email or not password:
+        print("No super admin yet: set SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD "
+              "(and optionally SUPERADMIN_NAME), then restart or sign in.")
+        return
+    try:
+        email, name = auth.check_email(email), auth.check_name(os.getenv("SUPERADMIN_NAME") or "Super admin")
+        auth.check_password(password)
+    except auth.Invalid as exc:
+        print(f"Super admin not created, check the SUPERADMIN_* settings: {exc}")
+        return
+    if await users.find_one({"email": email}, {"_id": 1}):
+        print("Super admin not created: a user with SUPERADMIN_EMAIL already exists and is left as is.")
+        return
+    password_hash = await asyncio.to_thread(auth.hash_password, password)
+    try:
+        await users.insert_one(_new_user(email, name, auth.SUPER_ADMIN, password_hash))
+        print("Created the super admin from SUPERADMIN_EMAIL.")
+    except DuplicateKeyError:
+        pass  # another instance created it at the same moment
+
+
 @app.get("/")
 async def root():
     return {"name": "TTPS API", "docs": "/docs"}
@@ -314,7 +428,7 @@ async def health():
 
 # --- daily entries -----------------------------------------------------------------
 
-@app.get("/api/entries")
+@app.get("/api/entries", dependencies=[Depends(require_user)])
 async def list_entries(month: Optional[str] = None, fy: Optional[int] = None):
     """Entries for one month (YYYY-MM) or one fiscal year (fy=2026 means Apr 2026 - Mar 2027)."""
     query: dict = {}
@@ -329,17 +443,23 @@ async def list_entries(month: Optional[str] = None, fy: Optional[int] = None):
 
 
 @app.put("/api/entries/{date_str}")
-async def upsert_entry(date_str: str, payload: dict):
+async def upsert_entry(date_str: str, payload: dict, user: dict = Depends(require_editor)):
     """Manual correction of a day's values."""
     _check_date(date_str)
     clean = _clean_fields(payload)
     if clean:
         clean["updatedAt"] = _now()
-    await _db()["entries"].update_one(
+    # The day as it was, to say in the activity log which values changed.
+    before = await _db()["entries"].find_one_and_update(
         {"date": date_str},
         {"$set": clean, "$setOnInsert": {"date": date_str, "source": "manual"}},
+        projection={"_id": 0},
         upsert=True,
-    )
+        return_document=ReturnDocument.BEFORE,
+    ) or {}
+    changed = [k for k, v in clean.items() if k != "updatedAt" and before.get(k) != v]
+    if changed:
+        await _log(user["id"], "entry_edited", f"Edited {_day_label(date_str)}: {', '.join(changed)}")
     return await _db()["entries"].find_one({"date": date_str}, {"_id": 0})
 
 
@@ -378,7 +498,7 @@ async def _month_context(data_date: date) -> dict[str, dict]:
 
 
 @app.post("/api/reports")
-async def upload_report(file: UploadFile = File(...)):
+async def upload_report(file: UploadFile = File(...), user: dict = Depends(require_editor)):
     """Read a Daily System Report image and store the previous day's data from it.
 
     The page is transcribed, its own arithmetic is re-checked, and only a page
@@ -453,10 +573,13 @@ async def upload_report(file: UploadFile = File(...)):
     await _db()["reports"].insert_one(dict(doc))
     if status == "saved":
         await _save_entry(check.data_date, check.entry, report_id)
+    outcome = "saved" if status == "saved" else "needs review"
+    what = f"the report for {_day_label(doc['dataDate'])}" if doc["dataDate"] else "a report with an unreadable date"
+    await _log(user["id"], "report_uploaded", f"Uploaded {what} ({outcome})")
     return doc
 
 
-@app.get("/api/reports")
+@app.get("/api/reports", dependencies=[Depends(require_user)])
 async def list_reports(month: Optional[str] = None, day: Optional[str] = Query(None, alias="date"),
                        limit: int = 60):
     """Uploaded reports, newest first, without the full transcription. `date`
@@ -479,12 +602,12 @@ async def _report_or_404(report_id: str) -> dict:
     return doc
 
 
-@app.get("/api/reports/{report_id}")
+@app.get("/api/reports/{report_id}", dependencies=[Depends(require_user)])
 async def get_report(report_id: str):
     return await _report_or_404(report_id)
 
 
-@app.get("/api/reports/{report_id}/image")
+@app.get("/api/reports/{report_id}/image", dependencies=[Depends(require_user)])
 async def get_report_image(report_id: str):
     doc = await _db()["report_images"].find_one({"_id": report_id})
     if not doc:
@@ -497,7 +620,7 @@ async def get_report_image(report_id: str):
 
 
 @app.post("/api/reports/{report_id}/confirm")
-async def confirm_report(report_id: str, payload: dict):
+async def confirm_report(report_id: str, payload: dict, user: dict = Depends(require_editor)):
     """Save a report that needed review, with any corrections made by the user."""
     doc = await _report_or_404(report_id)
     data_date_str = payload.get("dataDate") or doc.get("dataDate")
@@ -508,12 +631,13 @@ async def confirm_report(report_id: str, payload: dict):
     await _save_entry(data_date, entry, report_id)
     update = {"status": "saved", "dataDate": data_date.isoformat(), "entry": entry, "confirmedAt": _now()}
     await _db()["reports"].update_one({"id": report_id}, {"$set": update})
+    await _log(user["id"], "report_confirmed", f"Confirmed the report for {_day_label(update['dataDate'])}")
     return {**doc, **update}
 
 
 # --- derived figures ------------------------------------------------------------------
 
-@app.get("/api/performance/{date_str}")
+@app.get("/api/performance/{date_str}", dependencies=[Depends(require_user)])
 async def performance(date_str: str):
     """Daily / month-to-date / year-to-date performance report for one date."""
     on = _check_date(date_str)
@@ -522,7 +646,7 @@ async def performance(date_str: str):
     return calc.performance_report(entries, config, on)
 
 
-@app.get("/api/analytics")
+@app.get("/api/analytics", dependencies=[Depends(require_user)])
 async def get_analytics(on: Optional[str] = None):
     """Trends and things to look at for the Home screen (analytics.py), for
     `on` or by default the latest day with generation data."""
@@ -553,21 +677,30 @@ async def get_analytics(on: Optional[str] = None):
     return analytics.analytics(entries, config, day, today, latest=latest)
 
 
-@app.get("/api/config/{fy}")
+@app.get("/api/config/{fy}", dependencies=[Depends(require_user)])
 async def get_config(fy: int):
     return await _config(fy)
 
 
+# What each config key is called in activity lines.
+CONFIG_LABELS = {"unitMw": "unit MW", "monthlyTargets": "targets",
+                 "coalStockAnchors": "opening coal stock", "oilStockAnchors": "opening oil stock"}
+
+
 @app.put("/api/config/{fy}")
-async def put_config(fy: int, payload: dict):
+async def put_config(fy: int, payload: dict, user: dict = Depends(require_editor)):
     """Override targets or opening stocks for a fiscal year."""
     allowed = {k: v for k, v in payload.items() if k in calc.CONFIG_KEYS}
     await _db()["config"].update_one({"fy": fy}, {"$set": allowed, "$setOnInsert": {"fy": fy}}, upsert=True)
+    if allowed:
+        what = ", ".join(CONFIG_LABELS.get(k, k) for k in allowed)
+        await _log(user["id"], "config_changed", f"Changed FY {_fy_label(fy)} {what}")
     return await _config(fy)
 
 
 @app.post("/api/import/workbook")
-async def import_workbook(file: UploadFile = File(...), overwrite: bool = False):
+async def import_workbook(file: UploadFile = File(...), overwrite: bool = False,
+                          user: dict = Depends(require_editor)):
     """Load history from the plant's 'TTPS DAILY GEN DATA' workbook (DAILY DATA sheet).
 
     Days already filled from a report image keep their values unless overwrite
@@ -603,6 +736,8 @@ async def import_workbook(file: UploadFile = File(...), overwrite: bool = False)
             {"fy": book["fy"]}, {"$set": book["config"], "$setOnInsert": {"fy": book["fy"]}}, upsert=True
         )
     days = [r["date"] for r in book["entries"]]
+    await _log(user["id"], "workbook_imported",
+               f"Imported FY {_fy_label(book['fy'])} workbook: {added} added, {updated} updated")
     return {
         "fy": book["fy"],
         "days": len(days),
@@ -641,7 +776,7 @@ async def _live_day(day: date) -> dict:
     return live.summarize(readings, day, _ist_now(), unit_mw=config["unitMw"])
 
 
-@app.get("/api/live-generation")
+@app.get("/api/live-generation", dependencies=[Depends(require_user)])
 async def live_generation():
     """Proxy the upstream TTPS portal feed (bypasses browser CORS). It never
     writes: the history is recorded by the scheduler alone (/api/live/record).
@@ -667,7 +802,8 @@ async def live_record(key: Optional[str] = None, x_record_key: Optional[str] = H
     by an outside scheduler, and the only thing that writes the history. Each
     call stores one document for its minute, even when the portal has not
     published anything new since the last one (feedAt says how old it is).
-    The key (LIVE_RECORD_KEY) comes as ?key= or an X-Record-Key header."""
+    The key (LIVE_RECORD_KEY) comes as ?key= or an X-Record-Key header; the
+    scheduler has no session, so this route needs none."""
     expected = os.getenv("LIVE_RECORD_KEY")  # read per request, not at import
     if not expected:
         raise HTTPException(503, "Recording is not configured. Set LIVE_RECORD_KEY on the server.")
@@ -683,8 +819,251 @@ async def live_record(key: Optional[str] = None, x_record_key: Optional[str] = H
     return {"recorded": recorded, "at": sample["at"], "feedAt": reading["at"], "u1": reading["u1"], "u2": reading["u2"]}
 
 
-@app.get("/api/live/day")
+@app.get("/api/live/day", dependencies=[Depends(require_user)])
 async def live_day(day: Optional[str] = Query(None, alias="date")):
     """One IST day of recorded readings (default today): load curve, energy,
     PLF, projection, trips. Shape: live.summarize()."""
     return await _live_day(_check_date(day) if day else _today())
+
+
+# --- sign-in and your own account --------------------------------------------------------
+
+def _https(request: Request) -> bool:
+    """Behind Vercel or nginx the app sees plain http; the proxy says what the browser used."""
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return forwarded == "https" or request.url.scheme == "https"
+
+
+def _cookie_options(request: Request) -> dict:
+    # HttpOnly: page scripts never see the token. Lax: other sites cannot post with it.
+    return {"path": "/", "httponly": True, "samesite": "lax", "secure": _https(request)}
+
+
+def _valid(check, value):
+    """Run one of auth's input checks; a bad value is a 400 saying what is wrong."""
+    try:
+        return check(value)
+    except auth.Invalid as exc:
+        raise HTTPException(400, str(exc))
+
+
+async def _failed_login(user: dict) -> None:
+    """Count a wrong password. The MAX_FAILED_LOGINS-th in a row locks the
+    account for LOCK_MINUTES and starts the count again."""
+    users = _db()["users"]
+    doc = await users.find_one_and_update({"id": user["id"]}, {"$inc": {"failedLogins": 1}},
+                                          projection={"failedLogins": 1}, return_document=ReturnDocument.AFTER)
+    if doc and doc.get("failedLogins", 0) >= auth.MAX_FAILED_LOGINS:
+        until = _utcnow() + timedelta(minutes=auth.LOCK_MINUTES)
+        await users.update_one({"id": user["id"]}, {"$set": {"failedLogins": 0, "lockedUntil": auth.iso(until)}})
+        raise HTTPException(429, f"Too many attempts. Try again in {auth.LOCK_MINUTES} min.")
+
+
+@app.post("/api/auth/login")
+async def login(payload: dict, request: Request, response: Response):
+    """Check the email and password and start a session (an HttpOnly cookie).
+    An unknown email and a wrong password get the same answer."""
+    email, password = auth.normalize_email(payload.get("email")), payload.get("password")
+    if not email or not isinstance(password, str) or not password:
+        raise HTTPException(400, "Enter your email and password")
+    # A serverless host may have skipped startup: make sure of the unique
+    # email index and the super admin before anything else.
+    await _ensure_indexes()
+    await _seed_super_admin()
+    users = _db()["users"]
+    user = await users.find_one({"email": email}, {"_id": 0, "activity": 0})
+    now = _utcnow()
+    if user and (minutes := auth.locked_minutes(user, now)):
+        raise HTTPException(429, f"Too many attempts. Try again in {minutes} min.")
+    ok = await asyncio.to_thread(auth.verify_password, password, user.get("passwordHash") if user else None)
+    if not ok:
+        if user:
+            await _failed_login(user)
+        raise HTTPException(401, "Wrong email or password")
+
+    token = auth.new_token()
+    # Expired sessions go first: one update cannot both pull from and push to a list.
+    await users.update_one({"id": user["id"]}, {"$pull": {"sessions": {"expiresAt": {"$lte": auth.iso(now)}}}})
+    session = auth.new_session(auth.token_hash(token), now, request.headers.get("user-agent"))
+    await users.update_one({"id": user["id"]}, {
+        "$push": {"sessions": {"$each": [session], "$slice": -auth.SESSIONS_KEPT}},
+        "$set": {"lastLoginAt": auth.iso(now), "failedLogins": 0, "lockedUntil": None},
+    })
+    await _log(user["id"], "login", "Signed in")
+    response.set_cookie(auth.COOKIE, token, max_age=auth.SESSION_DAYS * 24 * 3600, **_cookie_options(request))
+    return {"user": auth.public_user({**user, "lastLoginAt": auth.iso(now)})}
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request, response: Response):
+    """End this session if the cookie names one. The cookie is cleared whatever happens."""
+    token = request.cookies.get(auth.COOKIE)
+    if token:
+        hashed = auth.token_hash(token)
+        try:
+            user = await _db()["users"].find_one_and_update(
+                {"sessions.hash": hashed}, {"$pull": {"sessions": {"hash": hashed}}}, projection={"id": 1})
+            if user:
+                await _log(user["id"], "logout", "Signed out")
+        except (HTTPException, PyMongoError) as exc:
+            print(f"Could not end the session: {getattr(exc, 'detail', exc)}")
+    response.delete_cookie(auth.COOKIE, **_cookie_options(request))
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def me(user: dict = Depends(require_user)):
+    return {"user": auth.public_user(user)}
+
+
+@app.patch("/api/auth/me")
+async def update_me(payload: dict, user: dict = Depends(require_user)):
+    """Change your own name. The email never changes."""
+    name = _valid(auth.check_name, payload.get("name"))
+    if name != user["name"]:
+        await _db()["users"].update_one({"id": user["id"]}, {"$set": {"name": name, "updatedAt": _now()}})
+        await _log(user["id"], "name_changed", f"Changed name to {name}")
+    return {"user": auth.public_user({**user, "name": name})}
+
+
+@app.post("/api/auth/password")
+async def change_password(payload: dict, request: Request, user: dict = Depends(require_user)):
+    """Change your own password. Every other session of yours ends; this one
+    stays. A wrong current password is a 400, not a 401, so the app does not
+    take it as being signed out."""
+    new = _valid(auth.check_password, payload.get("newPassword"))
+    current = payload.get("currentPassword")
+    if not isinstance(current, str) or not await asyncio.to_thread(
+            auth.verify_password, current, user.get("passwordHash")):
+        raise HTTPException(400, "Current password is wrong")
+    password_hash = await asyncio.to_thread(auth.hash_password, new)
+    await _db()["users"].update_one({"id": user["id"]}, {
+        "$set": {"passwordHash": password_hash, "updatedAt": _now()},
+        "$pull": {"sessions": {"hash": {"$ne": request.state.session_hash}}},
+    })
+    await _log(user["id"], "password_changed", "Changed password")
+    return {"ok": True}
+
+
+async def _activity(user_id: str, limit: int) -> list[dict]:
+    doc = await _db()["users"].find_one({"id": user_id}, {"_id": 0, "activity": 1})
+    if doc is None:
+        raise HTTPException(404, "User not found")
+    return auth.newest_first(doc.get("activity"), limit)
+
+
+@app.get("/api/auth/activity")
+async def my_activity(limit: int = 100, user: dict = Depends(require_user)):
+    """Your own activity, newest first (limit 1 to 200)."""
+    return await _activity(user["id"], limit)
+
+
+# --- managing users (super admin only) -------------------------------------------------------
+
+# A user without what the API never sends (the hash, sessions, activity).
+USER_FIELDS = {"_id": 0, "passwordHash": 0, "sessions": 0, "activity": 0}
+
+
+async def _user_or_404(user_id: str) -> dict:
+    doc = await _db()["users"].find_one({"id": user_id}, USER_FIELDS)
+    if not doc:
+        raise HTTPException(404, "User not found")
+    return doc
+
+
+def _role_phrase(role: str) -> str:
+    return "an admin" if role == auth.ADMIN else "a viewer"
+
+
+@app.get("/api/users", dependencies=[Depends(require_super_admin)])
+async def list_users():
+    """Everyone, the super admin first, then by name."""
+    users = await _db()["users"].find({}, USER_FIELDS).to_list(length=None)
+    users.sort(key=lambda u: (u.get("role") != auth.SUPER_ADMIN, (u.get("name") or "").lower()))
+    return [auth.public_user(u) for u in users]
+
+
+@app.post("/api/users", status_code=201)
+async def create_user(payload: dict, actor: dict = Depends(require_super_admin)):
+    """Onboard someone as admin or viewer. The super admin hands them the first password."""
+    email = _valid(auth.check_email, payload.get("email"))
+    name = _valid(auth.check_name, payload.get("name"))
+    password = _valid(auth.check_password, payload.get("password"))
+    role = _valid(auth.check_role, payload.get("role"))
+    users = _db()["users"]
+    taken = HTTPException(409, "Someone with this email already exists")
+    if await users.find_one({"email": email}, {"_id": 1}):
+        raise taken
+    doc = _new_user(email, name, role, await asyncio.to_thread(auth.hash_password, password), created_by=actor)
+    await _ensure_indexes()  # the unique email index settles two onboardings at once
+    try:
+        await users.insert_one(doc)
+    except DuplicateKeyError:
+        raise taken
+    await _log(actor["id"], "user_created", f"Onboarded {name} ({email}) as {role}")
+    return {"user": auth.public_user(doc)}
+
+
+@app.patch("/api/users/{user_id}")
+async def update_user(user_id: str, payload: dict, actor: dict = Depends(require_super_admin)):
+    """Rename someone or switch them between admin and viewer. The email never changes."""
+    target = await _user_or_404(user_id)
+    if target["role"] == auth.SUPER_ADMIN or target["id"] == actor["id"]:
+        raise HTTPException(400, "The super admin's access cannot change" if "role" in payload
+                            else "Use Account to change your own name")
+    changes = {}
+    if payload.get("name") is not None:
+        changes["name"] = _valid(auth.check_name, payload["name"])
+    if payload.get("role") is not None:
+        changes["role"] = _valid(auth.check_role, payload["role"])
+    changes = {k: v for k, v in changes.items() if v != target.get(k)}
+    if not changes:
+        return {"user": auth.public_user(target)}
+    await _db()["users"].update_one({"id": user_id}, {"$set": {**changes, "updatedAt": _now()}})
+    old_name = target["name"]
+    target.update(changes)
+    logs = []
+    if "name" in changes:
+        logs += [_log(actor["id"], "user_updated", f"Renamed {old_name} to {target['name']}"),
+                 _log(user_id, "name_changed", f"Name changed to {target['name']} by {actor['name']}")]
+    if "role" in changes:
+        logs += [_log(actor["id"], "user_updated", f"Made {target['name']} {_role_phrase(target['role'])}"),
+                 _log(user_id, "role_changed", f"Access changed to {target['role']} by {actor['name']}")]
+    await asyncio.gather(*logs)
+    return {"user": auth.public_user(target)}
+
+
+@app.post("/api/users/{user_id}/password")
+async def set_user_password(user_id: str, payload: dict, actor: dict = Depends(require_super_admin)):
+    """Set a new password for someone who forgot theirs. All their sessions end
+    and any lockout is lifted."""
+    target = await _user_or_404(user_id)
+    if target["id"] == actor["id"] or target["role"] == auth.SUPER_ADMIN:
+        raise HTTPException(400, "Use Account to change your own password")
+    password = _valid(auth.check_password, payload.get("password"))
+    password_hash = await asyncio.to_thread(auth.hash_password, password)
+    await _db()["users"].update_one({"id": user_id}, {"$set": {
+        "passwordHash": password_hash, "sessions": [], "failedLogins": 0, "lockedUntil": None, "updatedAt": _now(),
+    }})
+    await asyncio.gather(_log(actor["id"], "user_password_set", f"Set a new password for {target['name']}"),
+                         _log(user_id, "password_set", f"Password set by {actor['name']}"))
+    return {"ok": True}
+
+
+@app.delete("/api/users/{user_id}")
+async def delete_user(user_id: str, actor: dict = Depends(require_super_admin)):
+    """Remove someone. Their sessions go with them, so they are signed out at once."""
+    target = await _user_or_404(user_id)
+    if target["id"] == actor["id"]:
+        raise HTTPException(400, "You cannot remove yourself")
+    if target["role"] == auth.SUPER_ADMIN:
+        raise HTTPException(400, "The super admin cannot be removed")
+    await _db()["users"].delete_one({"id": user_id})
+    await _log(actor["id"], "user_deleted", f"Removed {target['name']} ({target['email']})")
+    return {"ok": True}
+
+
+@app.get("/api/users/{user_id}/activity", dependencies=[Depends(require_super_admin)])
+async def user_activity(user_id: str, limit: int = 100):
+    """Someone's activity, newest first (limit 1 to 200)."""
+    return await _activity(user_id, limit)

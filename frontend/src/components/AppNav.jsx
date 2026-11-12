@@ -1,17 +1,34 @@
 import { useEffect, useState } from 'react';
-import { CloudArrowUpIcon, DatabaseIcon, FileTextIcon, HouseIcon, MoonIcon, SunIcon } from '@phosphor-icons/react';
+import {
+  CloudArrowUpIcon,
+  DatabaseIcon,
+  FileTextIcon,
+  HouseIcon,
+  MoonIcon,
+  SunIcon,
+  UserCircleIcon,
+  UsersThreeIcon,
+} from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/lib/hooks';
 
+// `need`: who sees the tab. Upload writes data (admins and the super admin); Users is the super admin's alone.
 const NAV = [
   { screen: 'home', label: 'Home', short: 'Home', icon: HouseIcon },
-  { screen: 'upload', label: 'Upload', short: 'Upload', icon: CloudArrowUpIcon },
+  { screen: 'upload', label: 'Upload', short: 'Upload', icon: CloudArrowUpIcon, need: 'edit' },
   { screen: 'daily', label: 'Daily report', short: 'Report', icon: FileTextIcon },
   { screen: 'data', label: 'Data', short: 'Data', icon: DatabaseIcon },
+  { screen: 'users', label: 'Users', short: 'Users', icon: UsersThreeIcon, need: 'superAdmin' },
+  { screen: 'account', label: 'Account', short: 'Account', icon: UserCircleIcon },
 ];
 
-const STATION = 'Tenughat · 2 × 210 MW';
+/** The tabs a person has: 4 for a viewer, 5 for an admin, 6 for the super admin. */
+export function navFor({ canEdit, isSuperAdmin }) {
+  return NAV.filter((n) => (n.need === 'edit' ? canEdit : n.need === 'superAdmin' ? isSuperAdmin : true));
+}
+
+export const STATION = 'Tenughat · 2 × 210 MW';
 
 function linkProps(screen, onNavigate) {
   return {
@@ -45,7 +62,7 @@ function UploadDot({ uploading, pendingReview, className }) {
   );
 }
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const [theme, setTheme] = useTheme();
   const next = theme === 'dark' ? 'light' : 'dark';
   return (
@@ -65,8 +82,8 @@ function ThemeToggle() {
  * Top bar. On a phone it is slim: brand, where you are, theme toggle (the tab bar
  * does the navigating). From md up it carries the segmented nav as well.
  */
-export function AppHeader({ screen, onNavigate, uploading, pendingReview }) {
-  const current = NAV.find((n) => n.screen === screen);
+export function AppHeader({ items, screen, onNavigate, uploading, pendingReview }) {
+  const current = items.find((n) => n.screen === screen);
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-[1.8]">
       <div className="pad-x-safe mx-auto flex h-12 max-w-[1280px] items-center gap-3 md:h-14">
@@ -82,7 +99,7 @@ export function AppHeader({ screen, onNavigate, uploading, pendingReview }) {
 
         <nav className="hidden min-w-0 flex-1 pl-4 md:flex" aria-label="Main">
           <div className="inline-flex rounded-lg border border-border p-0.5">
-            {NAV.map(({ screen: s, label, icon: Icon }) => {
+            {items.map(({ screen: s, label, icon: Icon }) => {
               const active = s === screen;
               return (
                 <a
@@ -152,9 +169,10 @@ function useMinimizeOnScroll() {
  * indicator, content visible beneath it, and a lens that slides to the active tab.
  * Hidden from md up, where the header carries the nav.
  */
-export function TabBar({ screen, onNavigate, uploading, pendingReview }) {
+export function TabBar({ items, screen, onNavigate, uploading, pendingReview }) {
   const [minimized, setMinimized] = useMinimizeOnScroll();
-  const index = Math.max(0, NAV.findIndex((n) => n.screen === screen));
+  const count = items.length; // 4 to 6, by role
+  const index = Math.max(0, items.findIndex((n) => n.screen === screen));
   const go = (s) => {
     setMinimized(false);
     onNavigate(s);
@@ -170,14 +188,15 @@ export function TabBar({ screen, onNavigate, uploading, pendingReview }) {
         'h-[62px] transition-[height] duration-300 ease-spring data-[min=true]:h-12 motion-reduce:transition-none'
       )}
     >
-      {/* The lens: one pill that slides between tabs. Same width as a tab (the list has px-1). */}
+      {/* The lens: one pill that slides between tabs. Same width as a tab (the list has px-1).
+          Inline styles because the tab count depends on the role and Tailwind cannot build classes at run time. */}
       <span
         aria-hidden
-        className="glass-lens absolute bottom-1 left-1 top-1 w-[calc((100%-0.5rem)/4)] rounded-full transition-transform duration-300 ease-spring motion-reduce:transition-none"
-        style={{ transform: `translateX(${index * 100}%)` }}
+        className="glass-lens absolute bottom-1 left-1 top-1 rounded-full transition-transform duration-300 ease-spring motion-reduce:transition-none"
+        style={{ width: `calc((100% - 0.5rem) / ${count})`, transform: `translateX(${index * 100}%)` }}
       />
-      <ul className="relative grid h-full grid-cols-4 px-1">
-        {NAV.map(({ screen: s, short, icon: Icon }) => {
+      <ul className="relative grid h-full px-1" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
+        {items.map(({ screen: s, short, icon: Icon }) => {
           const active = s === screen;
           return (
             <li key={s} className="min-w-0">
@@ -197,9 +216,10 @@ export function TabBar({ screen, onNavigate, uploading, pendingReview }) {
                     <UploadDot uploading={uploading} pendingReview={pendingReview} className="-right-1 -top-0.5" />
                   )}
                 </span>
+                {/* Six tabs leave about 46 px each on a 320 px phone: one line, clipped rather than wrapped. */}
                 <span
                   className={cn(
-                    'mt-[3px] max-h-3 overflow-hidden text-[10px] font-medium leading-3 tracking-normal transition-[opacity,max-height,margin] duration-300 ease-spring',
+                    'mt-[3px] max-h-3 max-w-full overflow-hidden whitespace-nowrap px-0.5 text-[10px] font-medium leading-3 tracking-normal transition-[opacity,max-height,margin] duration-300 ease-spring',
                     'group-data-[min=true]:mt-0 group-data-[min=true]:max-h-0 group-data-[min=true]:opacity-0 motion-reduce:transition-none',
                     active && 'font-semibold'
                   )}

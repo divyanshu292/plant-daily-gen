@@ -1,5 +1,6 @@
 import { CaretRightIcon, CheckCircleIcon, InfoIcon, WarningCircleIcon, WarningIcon } from '@phosphor-icons/react';
 import { MicroLabel } from '@/components/common/Text';
+import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 const LEVELS = {
@@ -10,14 +11,15 @@ const LEVELS = {
 };
 
 /** Where a watch item takes the engineer: the fix for missing data, else the day's full report. */
-function linkFor(item, date) {
-  if (item.key === 'staleData') return 'upload';
+function linkFor(item, date, canEdit) {
+  if (item.key === 'staleData') return canEdit ? 'upload' : null; // view-only access cannot upload
   if (!date) return null;
   if (item.key === 'missingDays') return `data/${date.slice(0, 7)}`;
   return `daily/${date}`;
 }
 
 export function WatchList({ items, date, navigate }) {
+  const { canEdit } = useAuth();
   return (
     <section aria-labelledby="watch-heading" className="space-y-2">
       <MicroLabel as="h2" id="watch-heading">
@@ -28,7 +30,7 @@ export function WatchList({ items, date, navigate }) {
       ) : (
         <ul className="divide-y divide-border border-y border-border">
           {items.map((item) => (
-            <WatchItem key={`${item.key}-${item.title}`} item={item} to={linkFor(item, date)} navigate={navigate} />
+            <WatchItem key={`${item.key}-${item.title}`} item={item} to={linkFor(item, date, canEdit)} navigate={navigate} />
           ))}
         </ul>
       )}

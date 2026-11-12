@@ -9,6 +9,7 @@ import { STICKY_TOP } from '@/components/common/sticky';
 import { IMAGE_RETENTION_DAYS, ImageViewer, imageKept } from '@/components/common/ImageViewer';
 import { PerformanceTable } from '@/components/daily/PerformanceTable';
 import { apiUrl } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { useApiData } from '@/lib/hooks';
 import { addDays, fmtDate, fmtDayList, fmtNum, isIsoDate, localTodayIso } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ function stationDay(rows, key) {
 }
 
 export function DailyScreen({ arg, health, navigate }) {
+  const { canEdit } = useAuth(); // view-only access gets no upload or typing prompts
   const today = health.data?.today || localTodayIso();
   const fallback = health.data?.latestDate || today;
   const date = isIsoDate(arg) ? arg : null;
@@ -114,15 +116,17 @@ export function DailyScreen({ arg, health, navigate }) {
                   tone="attention"
                   title={`No data is stored for ${fmtDate(date, 'medium')}.`}
                   action={
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                      <Button variant="outline" size="touch" className="bg-transparent" onClick={() => navigate('upload')}>
-                        <UploadSimpleIcon weight="bold" />
-                        Upload the page dated {fmtDate(addDays(date, 1), 'short')}
-                      </Button>
-                      <Button variant="ghost" size="touch" onClick={() => navigate(`data/${date}`)}>
-                        Enter values by hand
-                      </Button>
-                    </div>
+                    canEdit && (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        <Button variant="outline" size="touch" className="bg-transparent" onClick={() => navigate('upload')}>
+                          <UploadSimpleIcon weight="bold" />
+                          Upload the page dated {fmtDate(addDays(date, 1), 'short')}
+                        </Button>
+                        <Button variant="ghost" size="touch" onClick={() => navigate(`data/${date}`)}>
+                          Enter values by hand
+                        </Button>
+                      </div>
+                    )
                   }
                 >
                   The day columns are left empty. Month and year figures count this day as zero.

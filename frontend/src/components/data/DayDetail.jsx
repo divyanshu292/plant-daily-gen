@@ -8,16 +8,35 @@ import { ValueInput } from '@/components/common/ValueInput';
 import { ImageViewer } from '@/components/common/ImageViewer';
 import { SourceMarker } from '@/components/data/CoverageCalendar';
 import { api, apiUrl } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { useDialog } from '@/lib/hooks';
 import { DETAIL_GROUPS, fieldKind } from '@/lib/fields';
 import { add, dayStatus, STATUS_TEXT } from '@/lib/entries';
-import { addDays, fmtDate, fmtDateTime, fmtHours, fmtNum } from '@/lib/format';
+import { addDays, DASH, fmtDate, fmtDateTime, fmtHours, fmtNum, toInputText } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 // One box per unit; a single station-level box spans both columns so right edges line up.
 const PAIR_W = 'w-[6.25rem] sm:w-28';
 const SINGLE_W = 'w-[13rem] sm:w-[14.5rem]';
 
-function Field({ field, entry, state, onSave, label, className }) {
+function Field({ field, entry, state, onSave, label, className, readOnly }) {
+  const kind = fieldKind(field);
+  if (readOnly) {
+    // View-only access: the stored value as an editor would see it, as plain text (no box that looks tappable).
+    const value = entry?.[field];
+    return (
+      <div
+        className={cn(
+          'flex min-h-9 items-center py-1.5 text-base leading-snug tabular md:text-sm',
+          kind === 'text' ? 'justify-start' : 'justify-end',
+          className
+        )}
+      >
+        <span className="sr-only">{label}: </span>
+        {value == null || value === '' ? <span className="text-muted-foreground/40">{DASH}</span> : toInputText(value, kind)}
+      </div>
+    );
+  }
   return (
     <ValueInput
       className={className}
@@ -39,9 +58,14 @@ function stationSum(row, entry) {
   return fmtNum(v, row.dp ?? 2);
 }
 
-/** One day's stored values, every field editable. Each change is saved when the box loses focus. */
+/**
+ * One day's stored values, every field editable. Each change is saved when the box loses focus.
+ * View-only access (a viewer) sees the same values without boxes.
+ */
 export function DayDetail({ date, entry, loaded = true, today, onClose, onSaved, onNavigate }) {
   useDialog(onClose);
+  const { canEdit } = useAuth();
+  const readOnly = !canEdit;
   const [states, setStates] = useState({});
   const [errors, setErrors] = useState({});
   const [viewing, setViewing] = useState(false);
@@ -106,14 +130,22 @@ export function DayDetail({ date, entry, loaded = true, today, onClose, onSaved,
                 )}
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Each value is saved when you leave its box (or press Enter). Clear a box to remove the value. Hours as h:mm.
+                {readOnly
+                  ? 'Hours as h:mm. Your access is view only.'
+                  : 'Each value is saved when you leave its box (or press Enter). Clear a box to remove the value. Hours as h:mm.'}
               </p>
             </div>
 
             {!entry && loaded && (
               <Notice tone="attention" title="Nothing is stored for this day yet.">
-                Values typed here are saved as entered by hand. To read them from the report instead, upload the page dated{' '}
-                {fmtDate(next, 'short')}.
+                {readOnly ? (
+                  <>Its figures are on the page dated {fmtDate(next, 'short')}.</>
+                ) : (
+                  <>
+                    Values typed here are saved as entered by hand. To read them from the report instead, upload the page dated{' '}
+                    {fmtDate(next, 'short')}.
+                  </>
+                )}
               </Notice>
             )}
 
@@ -171,7 +203,14 @@ export function DayDetail({ date, entry, loaded = true, today, onClose, onSaved,
                                   <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                                     Unit {i + 1}
                                   </div>
-                                  <Field field={f} entry={entry} state={states[f]} onSave={save} label={`${row.label}, unit ${i + 1}`} />
+                                  <Field
+                                    field={f}
+                                    entry={entry}
+                                    state={states[f]}
+                                    onSave={save}
+                                    readOnly={readOnly}
+                                    label={`${row.label}, unit ${i + 1}`}
+                                  />
                                 </div>
                               ))}
                             </div>
@@ -189,6 +228,7 @@ export function DayDetail({ date, entry, loaded = true, today, onClose, onSaved,
                                 entry={entry}
                                 state={states[row.u1]}
                                 onSave={save}
+                                readOnly={readOnly}
                                 label={`${row.label}, unit 1`}
                               />
                               <Field
@@ -197,6 +237,7 @@ export function DayDetail({ date, entry, loaded = true, today, onClose, onSaved,
                                 entry={entry}
                                 state={states[row.u2]}
                                 onSave={save}
+                                readOnly={readOnly}
                                 label={`${row.label}, unit 2`}
                               />
                             </>
@@ -207,6 +248,7 @@ export function DayDetail({ date, entry, loaded = true, today, onClose, onSaved,
                               entry={entry}
                               state={states[row.field]}
                               onSave={save}
+                              readOnly={readOnly}
                               label={row.label}
                             />
                           )}

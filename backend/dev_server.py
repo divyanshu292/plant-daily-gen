@@ -12,6 +12,8 @@
 - Live readings start empty. DEV_SEED_LIVE=1 fills today from 00:00 to now with
   a synthetic day (every 2 minutes, 140-165 MW, one Unit 2 trip and return),
   so the Home screen's load curve has something to draw.
+- Three users are created, one per role, all with the password DEV_PASSWORD,
+  and printed at startup.
 
 Nothing here is used in production; main.py is the real entry point.
 """
@@ -29,6 +31,7 @@ from mongomock_motor import AsyncMongoMockClient
 
 os.environ.setdefault("MONGODB_URI", "")
 import main  # noqa: E402
+import auth  # noqa: E402
 import extract  # noqa: E402
 import live  # noqa: E402
 import workbook_import  # noqa: E402
@@ -78,6 +81,24 @@ async def seed() -> None:
     print(f"dev: seeded {len(book['entries'])} days from {books[-1].name}")
 
 
+DEV_PASSWORD = "ttps-dev-pass"
+# One sign-in per role. With one here, SUPERADMIN_* from .env is not used.
+DEV_USERS = (
+    ("super@ttps.local", "Dev Super", auth.SUPER_ADMIN),
+    ("admin@ttps.local", "Dev Admin", auth.ADMIN),
+    ("viewer@ttps.local", "Dev Viewer", auth.VIEWER),
+)
+
+
+async def seed_users() -> None:
+    for email, name, role in DEV_USERS:
+        if not await main.db["users"].find_one({"email": email}):
+            await main.db["users"].insert_one(main._new_user(email, name, role, auth.hash_password(DEV_PASSWORD)))
+    print(f"dev: sign in with the password {DEV_PASSWORD} as")
+    for email, name, role in DEV_USERS:
+        print(f"dev:   {email:<18} {name} ({role})")
+
+
 def synthetic_day(now: datetime) -> list[dict]:
     """Readings every 2 minutes from today 00:00 IST to `now`: both units
     around 140-165 MW, following a daily swing, with Unit 2 tripping a little
@@ -116,6 +137,7 @@ async def seed_live() -> None:
 
 if __name__ == "__main__":
     asyncio.run(seed())
+    asyncio.run(seed_users())
     if os.getenv("DEV_SEED_LIVE") == "1":
         asyncio.run(seed_live())
     uvicorn.run(main.app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))

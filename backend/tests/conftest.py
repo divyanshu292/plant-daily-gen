@@ -8,6 +8,8 @@ Nothing in the suite touches the network, a real MongoDB or a real page reader:
 - Every test runs with the reader's API keys removed from the environment and
   with httpx.AsyncClient.send refusing to run, so an accidental real call to
   the reading service (or any other outbound request) fails loudly.
+- SUPERADMIN_* (which main.py's load_dotenv may have read from .env) are
+  removed too, so no real super admin is ever seeded into a test database.
 
 The plant workbook is not committed. Tests that need it skip when it is absent.
 """
@@ -27,11 +29,12 @@ os.environ["MONGODB_URI"] = ""
 from helpers import SKIP_REASON, WORKBOOK  # noqa: E402
 
 READER_KEYS = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+SUPERADMIN_KEYS = ("SUPERADMIN_EMAIL", "SUPERADMIN_PASSWORD", "SUPERADMIN_NAME")
 
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
-    for key in READER_KEYS:
+    for key in READER_KEYS + SUPERADMIN_KEYS:
         monkeypatch.delenv(key, raising=False)
 
     async def refuse(self, request, *args, **kwargs):
