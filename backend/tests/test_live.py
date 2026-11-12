@@ -177,6 +177,32 @@ def test_a_missing_unit_value_adds_no_energy_for_that_unit():
     assert s["energy"]["u1"] == pytest.approx(0.01) and s["energy"]["u2"] == 0.0
 
 
+def test_sample_is_keyed_on_the_minute_it_was_taken():
+    r = live.sample(live.parse_feed(feed()), datetime(2026, 11, 12, 21, 3, 41, tzinfo=IST))
+    assert (r["at"], r["feedAt"], r["u1At"]) == ("2026-11-12T21:03", "2026-11-12T20:55", "2026-11-12T20:55")
+    assert r["ts"] == datetime(2026, 11, 12, 15, 33, tzinfo=timezone.utc)
+
+
+def test_samples_of_a_stuck_portal_are_a_gap():
+    # Samples every minute 00:00-24:00 at 150 MW, but from 06:00 to 08:00 the
+    # portal kept showing its 05:58 reading.
+    samples = []
+    t, end = live.key_time("2026-11-12T00:00"), live.key_time("2026-11-13T00:00")
+    while t <= end:
+        r = reading(live.minute_key(t), 150.0, 150.0)
+        stuck = live.key_time("2026-11-12T06:00") <= t < live.key_time("2026-11-12T08:00")
+        r["feedAt"] = "2026-11-12T05:58" if stuck else live.minute_key(t - timedelta(minutes=2))
+        samples.append(r)
+        t += timedelta(minutes=1)
+    s = summarize(samples, now=NOW + timedelta(days=2))
+    # 06:00-06:13 still counts (the reading is at most 15 minutes old); the rest
+    # of the stuck stretch, up to the first fresh sample at 08:00, does not.
+    assert s["hours"]["covered"] == pytest.approx(24 - (8 - (6 + 13 / 60)), abs=0.02)
+    assert s["energy"]["u1"] == pytest.approx(0.15 * s["hours"]["covered"], abs=0.001)
+    assert not s["complete"]
+    assert all(live.fresh(r) for r in samples[:360])
+
+
 def test_no_readings():
     s = summarize([])
     assert s["points"] == [] and s["lastAt"] is None
@@ -354,7 +380,6 @@ def api(monkeypatch, portal):
     # Every request asks the portal; nothing carries over between tests.
     monkeypatch.setattr(main, "LIVE_CACHE_TTL_S", 0)
     monkeypatch.setattr(main, "live_cache", {"data": None, "fetched_at": 0.0})
-    monkeypatch.setattr(main, "live_recorded", {"at": None})
     monkeypatch.delenv("LIVE_RECORD_KEY", raising=False)
     with TestClient(main.app) as c:
         yield c
@@ -374,44 +399,13 @@ def store(readings: list[dict]) -> None:
     run(insert())
 
 
-def test_polling_records_each_reading_once(api, portal, monkeypatch):
-    writes = []
-    record = live.record
-
-    async def counted(collection, r):
-        writes.append(r["at"])
-        return await record(collection, r)
-
-    monkeypatch.setattr(main.live, "record", counted)
+def test_polling_never_writes(api, portal):
+    """Opening the app must not change the history: only the scheduler records."""
     for _ in range(3):
         response = api.get("/api/live-generation")
         assert response.status_code == 200 and response.json() == portal.feed  # passed through unchanged
-    assert portal.calls == 3 and writes == ["2026-11-12T20:55"]
-    [doc] = stored()
-    assert doc == {"_id": "2026-11-12T20:55", "ts": datetime(2026, 11, 12, 15, 25), "u1": 146.41, "u2": 156.56,
-                   "u1At": "2026-11-12T20:55", "u2At": "2026-11-12T20:55"}
-
-    portal.feed = feed(u1=147.0, u2=155.0, stamp="12-Nov-2026 20:57")
-    api.get("/api/live-generation")
-    assert writes == ["2026-11-12T20:55", "2026-11-12T20:57"]
-
-    # Another process (or the scheduler) recording a minute already stored changes nothing.
-    portal.feed = feed(u1=1.0, u2=2.0, stamp="12-Nov-2026 20:57")
-    main.live_recorded["at"] = None
-    api.get("/api/live-generation")
-    assert [(d["_id"], d["u1"]) for d in stored()] == [("2026-11-12T20:55", 146.41), ("2026-11-12T20:57", 147.0)]
-
-
-def test_a_recording_failure_does_not_break_the_live_feed(api, portal, monkeypatch):
-    async def broken(collection, r):
-        raise ServerSelectionTimeoutError("no primary")
-
-    monkeypatch.setattr(main.live, "record", broken)
-    response = api.get("/api/live-generation")
-    assert response.status_code == 200 and response.json() == portal.feed
-    # Not retried on every poll: the next try is with the next reading.
-    assert main.live_recorded["at"] == "2026-11-12T20:55"
-    # An unreadable feed is passed through and not recorded.
+    assert portal.calls == 3 and stored() == []
+    # An unreadable feed is passed through as well.
     portal.feed = {"error": "maintenance"}
     assert api.get("/api/live-generation").json() == {"error": "maintenance"}
 
@@ -448,7 +442,9 @@ def test_record_endpoint_needs_the_key(api, portal, monkeypatch):
 
     response = api.get("/api/live/record", params={"key": "s3cret"})
     assert response.status_code == 200
-    assert response.json() == {"recorded": True, "at": "2026-11-12T20:55", "u1": 146.41, "u2": 156.56}
+    assert response.json() == {"recorded": True, "at": "2026-11-12T21:00", "feedAt": "2026-11-12T20:55",
+                               "u1": 146.41, "u2": 156.56}
+    # A second call in the same minute keeps the first sample.
     again = api.post("/api/live/record", headers={"X-Record-Key": "s3cret"})
     assert again.status_code == 200 and again.json()["recorded"] is False
     assert len(stored()) == 1
@@ -457,6 +453,26 @@ def test_record_endpoint_needs_the_key(api, portal, monkeypatch):
     assert api.get("/api/live/record", params={"key": "s3cret"}).status_code == 502
     portal.down, portal.feed = False, []
     assert api.get("/api/live/record", params={"key": "s3cret"}).status_code == 502
+
+
+def test_every_scheduled_minute_is_stored_even_if_the_portal_has_not_moved(api, portal, monkeypatch):
+    monkeypatch.setenv("LIVE_RECORD_KEY", "s3cret")
+    for minute in range(3):  # 21:00, 21:01, 21:02; the portal still shows its 20:55 reading
+        monkeypatch.setattr(main, "_ist_now", lambda m=minute: NOW + timedelta(minutes=m, seconds=40))
+        assert api.get("/api/live/record", params={"key": "s3cret"}).json()["recorded"] is True
+    portal.feed = feed(u1=150.0, u2=0.4, stamp="12-Nov-2026 21:01")
+    monkeypatch.setattr(main, "_ist_now", lambda: NOW + timedelta(minutes=3))
+    api.get("/api/live/record", params={"key": "s3cret"})
+    assert [(d["_id"], d["feedAt"], d["u1"], d["u2"]) for d in stored()] == [
+        ("2026-11-12T21:00", "2026-11-12T20:55", 146.41, 156.56),
+        ("2026-11-12T21:01", "2026-11-12T20:55", 146.41, 156.56),
+        ("2026-11-12T21:02", "2026-11-12T20:55", 146.41, 156.56),
+        ("2026-11-12T21:03", "2026-11-12T21:01", 150.0, 0.4),
+    ]
+    assert stored()[0]["ts"] == datetime(2026, 11, 12, 15, 30)  # the sample's minute, UTC
+    # The stale fallback shows the portal's own stamp, not the sample's minute.
+    portal.down = True
+    assert [i["timestamp"] for i in api.get("/api/live-generation").json()] == ["12-Nov-2026 21:01"] * 2
 
 
 def test_day_endpoint(api):

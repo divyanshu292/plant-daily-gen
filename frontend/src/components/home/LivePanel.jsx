@@ -13,12 +13,15 @@ const STATION_MW = UNIT_MW * 2;
 // The SCADA feed stamps its own readings; older than this and they are not "live".
 const FEED_LATE_MS = 30 * 60 * 1000;
 
-const IST_CLOCK = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Asia/Kolkata',
+// Today's date and the clock, in the phone's own time zone ("Thu, 12 Nov" and
+// "22:37:15 IST" in India). The feed's own times stay in IST, as the portal gives them.
+const LOCAL_DATE = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+const LOCAL_CLOCK = new Intl.DateTimeFormat('en-IN', {
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
   hour12: false,
+  timeZoneName: 'short',
 });
 const IST_DAY = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' });
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -152,7 +155,9 @@ export function LivePanel({ askingRate = null }) {
           <ScrubReadout scrub={scrub} />
         ) : (
           <>
-            <span>{IST_CLOCK.format(new Date(now))} IST</span>
+            <span className="truncate">
+              {LOCAL_DATE.format(new Date(now))} · {LOCAL_CLOCK.format(new Date(now))}
+            </span>
             {stamp && (
               <span className={cn('truncate', (state === 'late' || dim) && 'text-attention')}>
                 {dim ? 'Last reading' : 'Updated'} {feedText}

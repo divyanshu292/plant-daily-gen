@@ -81,9 +81,6 @@ db = None
 
 http_client: Optional[httpx.AsyncClient] = None
 live_cache: dict = {"data": None, "fetched_at": 0.0}
-# The feed minute this process last recorded (or tried to). The Home screen polls
-# every few seconds, but a new reading arrives only every 2 minutes or so.
-live_recorded: dict = {"at": None}
 
 
 def _mongo_client(uri: str) -> AsyncIOMotorClient:
@@ -636,30 +633,6 @@ async def _fetch_live():
     return data
 
 
-async def _record_reading(reading: dict) -> bool:
-    """Store a parsed reading (idempotent). True if its minute was new."""
-    await _ensure_indexes()
-    recorded = await live.record(_db()[LIVE_COLLECTION], reading)
-    live_recorded["at"] = reading["at"]
-    return recorded
-
-
-async def _record_quietly(data) -> None:
-    """Record the feed's reading if this process has not already. Never raises:
-    the live figures on screen matter more than the history."""
-    reading = live.parse_feed(data)
-    if reading is None or reading["at"] == live_recorded["at"]:
-        return
-    # Marked before the write, so concurrent polls do not all write it, and a
-    # failed write is next tried with the next reading rather than on every poll.
-    # The scheduler (/api/live/record) fills in what a failure misses.
-    live_recorded["at"] = reading["at"]
-    try:
-        await _record_reading(reading)
-    except Exception as exc:  # whatever went wrong, it must not reach the live response
-        print(f"Could not record live reading {reading['at']}: {getattr(exc, 'detail', exc)}")
-
-
 async def _live_day(day: date) -> dict:
     """live.summarize() of one IST day, from the stored readings."""
     start, end = live.day_window(day)
@@ -670,9 +643,10 @@ async def _live_day(day: date) -> dict:
 
 @app.get("/api/live-generation")
 async def live_generation():
-    """Proxy the upstream TTPS portal feed (bypasses browser CORS) and record
-    each new reading. If the portal cannot be reached, the last recorded
-    reading is returned in the same shape with "stale": true on each item."""
+    """Proxy the upstream TTPS portal feed (bypasses browser CORS). It never
+    writes: the history is recorded by the scheduler alone (/api/live/record).
+    If the portal cannot be reached, the last recorded reading is returned in
+    the same shape with "stale": true on each item."""
     try:
         data = await _fetch_live()
     except HTTPException as exc:
@@ -684,14 +658,15 @@ async def live_generation():
         if last is None:
             raise exc
         return live.stale_feed(last)
-    await _record_quietly(data)
     return data
 
 
 @app.api_route("/api/live/record", methods=["GET", "POST"])
 async def live_record(key: Optional[str] = None, x_record_key: Optional[str] = Header(None)):
-    """Fetch the portal and store its reading. For an outside scheduler calling
-    every minute, so the history has no holes while nobody has the app open.
+    """Store this minute's sample of the portal's reading. Called every minute
+    by an outside scheduler, and the only thing that writes the history. Each
+    call stores one document for its minute, even when the portal has not
+    published anything new since the last one (feedAt says how old it is).
     The key (LIVE_RECORD_KEY) comes as ?key= or an X-Record-Key header."""
     expected = os.getenv("LIVE_RECORD_KEY")  # read per request, not at import
     if not expected:
@@ -702,8 +677,10 @@ async def live_record(key: Optional[str] = None, x_record_key: Optional[str] = H
     reading = live.parse_feed(await _fetch_live())
     if reading is None:
         raise HTTPException(502, "The portal's reply has no readable reading")
-    recorded = await _record_reading(reading)
-    return {"recorded": recorded, "at": reading["at"], "u1": reading["u1"], "u2": reading["u2"]}
+    sample = live.sample(reading, _ist_now())
+    await _ensure_indexes()
+    recorded = await live.record(_db()[LIVE_COLLECTION], sample)
+    return {"recorded": recorded, "at": sample["at"], "feedAt": reading["at"], "u1": reading["u1"], "u2": reading["u2"]}
 
 
 @app.get("/api/live/day")

@@ -1,8 +1,10 @@
 """The plant portal's live MW feed: parse it, store it, and sum up a day of it.
 
-The portal shows each unit's load to the minute and keeps no history, so every
-reading is stored as it arrives (main.py records it when the Home screen polls
-and when an outside scheduler calls /api/live/record). From those readings:
+The portal shows each unit's load to the minute and keeps no history. An
+outside scheduler calls /api/live/record every minute, and each call stores one
+sample for that minute: the portal's reading as it stands then, with the
+portal's own stamp beside it. Nothing else writes, so the history does not
+depend on anyone having the app open. From those samples:
 
 - the day's load curve and its energy, integrated over the spans with no long
   gap between readings,
@@ -30,9 +32,13 @@ UNITS = (1, 2)
 UNIT_MW = 210  # used when the fiscal year's config does not say otherwise
 HOURS_PER_DAY = 24
 
-# Readings arrive about every 2 minutes. Across a longer gap the load is not
-# known, so that stretch is neither integrated nor counted as covered.
+# Samples are taken every minute. Across a longer gap the load is not known, so
+# that stretch is neither integrated nor counted as covered.
 MAX_GAP_MIN = 15
+# The portal publishes a reading every 2 to 4 minutes, about 2 minutes late. A
+# sample whose reading is older than this means the portal was stuck: what the
+# load was then is not known, so the sample is treated like a missing one.
+STALE_FEED_MIN = 15
 # Below this a unit is offline: a stopped unit's feed shows a small non-zero value.
 OFFLINE_MW = 5
 # A trip is a sudden fall to offline from real load, seen between two readings
@@ -47,6 +53,7 @@ CHECK_TOLERANCE_PCT = 3.0
 CHECK_TOLERANCE_MU = 0.1
 
 MAX_GAP = timedelta(minutes=MAX_GAP_MIN)
+STALE_FEED = timedelta(minutes=STALE_FEED_MIN)
 TRIP_WITHIN = timedelta(minutes=TRIP_WITHIN_MIN)
 
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -130,6 +137,20 @@ def parse_feed(data) -> dict | None:
         reading[f"u{n}"] = mw
         reading[f"u{n}At"] = minute_key(stamp) if stamp else None
     return reading
+
+
+def sample(reading: dict, now: datetime) -> dict:
+    """The minute's sample: the portal's reading (parse_feed) keyed on the IST
+    minute of `now`, with the portal's own stamp kept as feedAt."""
+    minute = now.astimezone(IST).replace(second=0, microsecond=0)
+    return {**reading, "at": minute_key(minute), "ts": minute.astimezone(timezone.utc), "feedAt": reading["at"]}
+
+
+def fresh(r: dict) -> bool:
+    """False for a sample taken while the portal was stuck on an old reading.
+    (Samples stored before feedAt existed were keyed on the portal's stamp.)"""
+    feed_at = r.get("feedAt")
+    return feed_at is None or key_time(r["at"]) - key_time(feed_at) <= STALE_FEED
 
 
 def stale_feed(reading: dict) -> list[dict]:
@@ -220,11 +241,12 @@ def _round(value: float | None, dp: int) -> float | None:
 def summarize(readings: list[dict], day: date, now: datetime, unit_mw: float = UNIT_MW) -> dict:
     """The GET /api/live/day response for `day` (IST), as seen at `now`.
 
-    `readings` are stored readings ({"at", "u1", "u2", ...}) in any order; those
-    outside the day are used only at its edges (see day_window).
+    `readings` are stored samples ({"at", "u1", "u2", ...}) in any order; those
+    outside the day are used only at its edges (see day_window). Samples of a
+    stuck portal (see fresh) are left out, so they show as a gap.
     """
     start, end = day_bounds(day)
-    timed = sorted(((key_time(r["at"]), r) for r in readings), key=lambda tr: tr[0])
+    timed = sorted(((key_time(r["at"]), r) for r in readings if fresh(r)), key=lambda tr: tr[0])
     inside = [(t, r) for t, r in timed if start <= t < end]
     before = [(t, r) for t, r in timed if t < start][-1:]
     after = [(t, r) for t, r in timed if t >= end][:1]
@@ -297,23 +319,25 @@ def generation_checks(summary: dict, entry: dict) -> list[Check]:
 
 
 # --- storage -----------------------------------------------------------------------------
-# One document per feed minute in the live_readings collection:
-#   {_id: "2026-11-12T21:54" (IST), ts: <BSON date, UTC>, u1, u2, u1At, u2At}
+# One document per sampled minute in the live_readings collection:
+#   {_id: "2026-11-12T21:54" (IST minute of the sample), ts: <BSON date, UTC>,
+#    u1, u2, feedAt: the portal's stamp, u1At, u2At: each unit's own stamp}
 # ts carries the TTL index (main.py), which also serves the range reads below.
+_FIELDS = ("ts", "u1", "u2", "feedAt", "u1At", "u2At")
+
 
 def to_doc(reading: dict) -> dict:
-    return {"_id": reading["at"], **{k: reading.get(k) for k in ("ts", "u1", "u2", "u1At", "u2At")}}
+    return {"_id": reading["at"], **{k: reading.get(k) for k in _FIELDS}}
 
 
 def from_doc(doc: dict) -> dict:
-    return {"at": doc["_id"], **{k: doc.get(k) for k in ("u1", "u2", "u1At", "u2At")}}
+    return {"at": doc["_id"], **{k: doc.get(k) for k in _FIELDS if k != "ts"}}
 
 
 async def record(collection, reading: dict) -> bool:
-    """Store a reading unless its minute is already stored. True if it was new.
-
-    Keyed on the feed minute with $setOnInsert, so every poller and the
-    scheduler can record the same reading and it is stored once, as first seen.
+    """Store a minute's sample unless that minute is already stored. True if it
+    was new. $setOnInsert keeps the first sample if the scheduler calls twice
+    in one minute.
     """
     doc = to_doc(reading)
     del doc["_id"]  # the filter supplies it

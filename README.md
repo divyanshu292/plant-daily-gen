@@ -11,7 +11,7 @@ Each morning the plant prints a one-page **Daily System Report**. Staff photogra
   - `validate.py`: parses the cells and runs the arithmetic checks.
   - `calc.py`: the workbook's formulas.
   - `analytics.py`: trends and things to look at for the Home screen (`GET /api/analytics?on=YYYY-MM-DD`, default the latest day with data).
-  - `live.py`: records the plant portal's live MW feed and turns a day of it into a load curve, energy, PLF and trips (see [Live generation history](#live-generation-history)).
+  - `live.py`: samples the plant portal's live MW feed every minute and turns a day of it into a load curve, energy, PLF and trips (see [Live generation history](#live-generation-history)).
   - `workbook_import.py`: reads history from the workbook.
 
 ## Upload flow
@@ -46,22 +46,22 @@ What the page cannot check: the coal and oil stocks, oil receipt and oil in pipe
 
 ## Live generation history
 
-The plant portal shows each unit's present load in MW, stamped to the minute in IST, with a new reading about every 2 minutes. It keeps no history, so the backend stores every reading in MongoDB (`live_readings`, one document per feed minute). From those the Home screen gets today's load curve, trips, generation so far, and an independent check of each uploaded report's generation (above).
+The plant portal shows each unit's present load in MW, stamped to the minute in IST, with a new reading every 2 to 4 minutes, about 2 minutes late. It keeps no history, so the backend samples it **every minute** into MongoDB (`live_readings`, one document per sampled minute, with the portal's own stamp as `feedAt`). Only the scheduler writes; opening the app never changes the history. From those samples the backend builds the day's load curve, energy, PLF and trips.
 
-- `GET /api/live-generation` proxies the portal for the Home screen and records each new reading it sees. If the portal cannot be reached, it returns the last recorded reading with `"stale": true` on each item.
-- `GET|POST /api/live/record` fetches the portal and records its reading, for an outside scheduler. It needs the key in `LIVE_RECORD_KEY`, sent as `?key=` or an `X-Record-Key` header: a wrong or missing key gets `401`, and `503` means the server has no key set. It returns `{"recorded": true|false, "at", "u1", "u2"}`; `recorded` is false when that minute was already stored.
+- `GET /api/live-generation` proxies the portal for the Home screen. It never writes. If the portal cannot be reached, it returns the last recorded reading with `"stale": true` on each item.
+- `GET|POST /api/live/record` fetches the portal and stores this minute's sample, even if the portal has not published anything new since the last minute. It needs the key in `LIVE_RECORD_KEY`, sent as `?key=` or an `X-Record-Key` header: a wrong or missing key gets `401`, and `503` means the server has no key set. A second call in the same minute keeps the first sample (`"recorded": false`).
 - `GET /api/live/day?date=YYYY-MM-DD` (default today, IST) returns the day's readings and its figures:
-  - **Energy** is integrated (trapezoids) only over stretches where readings are at most 15 minutes apart. `hours.covered` says how much of the day that is, PLF is over those hours, and a day is `complete` once they reach 95 % of 24 h.
+  - **Energy** is integrated (trapezoids) only over stretches where samples are at most 15 minutes apart. A sample whose portal reading is more than 15 minutes old (the portal was stuck) counts as missing. `hours.covered` says how much of the day that is, PLF is over those hours, and a day is `complete` once they reach 95 % of 24 h.
   - **Events**: a *trip* is a fall from 50 MW or more to under 5 MW between readings at most 10 minutes apart; any other fall under 5 MW is a *stop*; the first reading back at 5 MW or more is *back*. A unit under 5 MW is offline: a stopped unit's feed shows a small non-zero value.
   - The thresholds are constants at the top of `backend/live.py`.
 
-**Recording while nobody has the app open.** Readings are recorded whenever someone has the app open. To fill the rest of the day, an outside scheduler calls the record endpoint every minute. Vercel's free plan runs its own cron jobs only once a day, so it cannot do this.
+**The scheduler.** An outside scheduler calls the record endpoint every minute; without it nothing is recorded. Vercel's free plan runs its own cron jobs only once a day, so a free external one is used:
 
 1. Generate a key with `openssl rand -hex 16` and set it as `LIVE_RECORD_KEY` in the Vercel project's environment variables. Redeploy so the function sees it.
 2. Create a free job at [cron-job.org](https://cron-job.org), run **every 1 minute**, calling `https://<your-app>/api/live/record?key=<LIVE_RECORD_KEY>`. (Sending the key in an `X-Record-Key` header instead keeps it out of request logs; cron-job.org can set headers under the job's advanced settings.)
-3. The job's history should show `200` responses, with `"recorded": true` about every other minute.
+3. The job's history should show `200` responses with `"recorded": true` every minute.
 
-Each minute is stored once however many callers record it. Readings are deleted **90 days** after their stamp by a TTL index on `ts`: `LIVE_RETENTION_DAYS` in `backend/main.py`, updated on the next start if it changes.
+Each minute is stored once. Samples are deleted **90 days** after they were taken by a TTL index on `ts`: `LIVE_RETENTION_DAYS` in `backend/main.py`, updated on the next start if it changes.
 
 ## Environment
 
@@ -73,7 +73,7 @@ Put the variables in `.env` in the project root (template: `backend/.env.example
 | `MONGODB_DB` | no | Database name (default `ttps`). |
 | `GEMINI_API_KEY` | to read images | Google Gemini API key. Without it uploads return 503; everything else works. |
 | `EXTRACTION_MODEL` | no | Gemini model that reads the page, or a comma-separated list tried in order when one is overloaded, over quota or too slow (default: `MODELS` in `backend/extract.py`). |
-| `LIVE_RECORD_KEY` | for the scheduler | Key for `/api/live/record` (see [Live generation history](#live-generation-history)). Without it that endpoint returns 503; the app still records while it is open. |
+| `LIVE_RECORD_KEY` | for the scheduler | Key for `/api/live/record` (see [Live generation history](#live-generation-history)). Without it that endpoint returns 503 and nothing is recorded. |
 | `PORT` | no | Port for `dev_server.py` (default 8000). |
 
 ## Running locally
