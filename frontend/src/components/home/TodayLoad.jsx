@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LightningSlashIcon, WarningIcon } from '@phosphor-icons/react';
 import { api } from '@/lib/api';
-import { DayCurve } from '@/components/home/charts';
+import { DayCurve, LoadLegend } from '@/components/home/charts';
 import { fmtNum } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -139,12 +139,15 @@ export function TodayLoad({ stamp, askingRate, active, onActive }) {
 
   const values = points.map((p) => p.stn).filter((v) => v != null);
   const label = values.length
-    ? `Station load today, ${hhmm(points[0].at)} to ${hhmm(points[points.length - 1].at)} IST, between ${fmtNum(Math.min(...values), 0)} and ${fmtNum(Math.max(...values), 0)} MW`
-    : 'Station load today';
+    ? `Station load today with Unit 1 and Unit 2, ${hhmm(points[0].at)} to ${hhmm(points[points.length - 1].at)} IST, total between ${fmtNum(Math.min(...values), 0)} and ${fmtNum(Math.max(...values), 0)} MW`
+    : 'Station and unit load today';
 
   return (
     <div className="space-y-2">
-      <DayCurve points={points} capacity={capacity} active={active} onActive={onActive} label={label} />
+      <div className="space-y-1">
+        <LoadLegend />
+        <DayCurve points={points} capacity={capacity} active={active} onActive={onActive} label={label} />
+      </div>
       <TodaySoFar day={day} askingRate={num(askingRate)} />
       <UnitEvents day={day} points={points} />
     </div>
@@ -155,21 +158,27 @@ function hoursText(h) {
   return fmtNum(h, h < 10 && h % 1 >= 0.05 ? 1 : 0);
 }
 
-/** "Today 4.12 MU · PLF 71.5 % · on course for 7.41 MU · needs 9.35/day", wrapping only after a dot. */
+/**
+ * "Today 4.12 MU · PLF 71.5 % · on course for 7.41 MU · needs 9.35/day", wrapping only after a dot.
+ * When the readings miss a good part of the day (recording started late, or the
+ * scheduler stopped) the MU only covers the recorded hours, so the line says so
+ * and leaves out the day's projection, which would come out far too low.
+ */
 function TodaySoFar({ day, askingRate }) {
   const energy = num(day.energy?.stn);
   const plf = num(day.plf?.stn);
-  const projected = num(day.projected?.stn);
   const elapsed = num(day.hours?.elapsed);
   const covered = num(day.hours?.covered);
   if (energy == null) return null;
-  const short = projected != null && askingRate != null && projected < askingRate;
   const partial = elapsed != null && covered != null && elapsed - covered > Math.max(1, elapsed * 0.1);
+  const projected = partial ? null : num(day.projected?.stn);
+  const short = projected != null && askingRate != null && projected < askingRate;
 
   // Two groups that each stay on one line: what the day has made, and where it is heading.
   const made = (
     <>
-      Today <Strong>{fmtNum(energy, 2)}</Strong> MU
+      {partial ? `Recorded ${hoursText(covered)} of ${hoursText(elapsed)} h · ` : 'Today '}
+      <Strong>{fmtNum(energy, 2)}</Strong> MU
       {plf != null && (
         <>
           {' · '}PLF <Strong>{fmtNum(plf, 1)}</Strong> %
@@ -198,12 +207,7 @@ function TodaySoFar({ day, askingRate }) {
         {made}
         {heading && ' ·'}
       </span>{' '}
-      {heading && <span className="whitespace-nowrap">{heading}</span>}{' '}
-      {partial && (
-        <span className="whitespace-nowrap text-muted-foreground/80">
-          (readings cover {hoursText(covered)} of {hoursText(elapsed)} h)
-        </span>
-      )}
+      {heading && <span className="whitespace-nowrap">{heading}</span>}
     </p>
   );
 }

@@ -27,6 +27,9 @@
     /* The one accent: things that need a person's attention (failed checks, missing days). */
     --attention: 28 92% 36%;
     --attention-foreground: 0 0% 100%;
+    /* Series colours for the two units on charts (blue #2a78d6, aqua #189e6e; CVD-checked, >= 3:1). */
+    --unit-1: 213 68% 50%;
+    --unit-2: 159 74% 36%;
   }
 
   .dark {
@@ -51,6 +54,8 @@
     --ring: 0 0% 100%;
     --attention: 38 92% 58%;
     --attention-foreground: 0 0% 0%;
+    --unit-1: 213 77% 56%;
+    --unit-2: 159 73% 36%;
   }
 }
 

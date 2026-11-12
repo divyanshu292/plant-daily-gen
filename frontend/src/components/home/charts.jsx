@@ -1,5 +1,6 @@
 // Small inline-SVG charts for the Home screen. Monochrome: marks use the
 // foreground / muted-foreground tokens, `attention` only for what needs a look.
+// The one exception is the day's load curve, where each unit has its own colour.
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fmtDate, fmtNum } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -225,14 +226,72 @@ function nearestReading(points, min) {
 }
 
 /**
- * One day's station load on a fixed 00–24 h axis, so the empty right-hand part
- * shows how much of the day is left. A line with a faint wash, a hairline at
- * full load, faint 6-hourly ticks; readings more than 15 min apart are not
- * joined. `points` are { min, stn } (minutes since 00:00), oldest first.
+ * The lines on the day's load curve, drawn in this order. The station total is
+ * the headline (ink, with the wash); the units wear their series colours.
+ */
+export const LOAD_SERIES = [
+  { key: 'stn', label: 'Total', stroke: 'stroke-foreground', fill: 'fill-foreground', swatch: 'bg-foreground', width: 2, dot: 4, wash: true },
+  { key: 'u1', label: 'Unit 1', stroke: 'stroke-unit-1', fill: 'fill-unit-1', swatch: 'bg-unit-1', width: 1.5, dot: 3.5 },
+  { key: 'u2', label: 'Unit 2', stroke: 'stroke-unit-2', fill: 'fill-unit-2', swatch: 'bg-unit-2', width: 1.5, dot: 3.5 },
+];
+
+/** Short line in a series' colour, for legends and readouts. */
+export function SeriesSwatch({ series, className }) {
+  return <span aria-hidden="true" className={cn('inline-block h-[3px] w-2.5 shrink-0 rounded-full align-middle', series.swatch, className)} />;
+}
+
+/** Legend for DayCurve: a swatch and name per line. */
+export function LoadLegend({ className }) {
+  return (
+    <ul className={cn('flex items-center gap-3 text-[10px] text-muted-foreground', className)} aria-label="Lines on the chart">
+      {LOAD_SERIES.map((s) => (
+        <li key={s.key} className="flex items-center gap-1">
+          <SeriesSwatch series={s} />
+          {s.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Runs of `key` with no reading more than 15 min apart, as a line path, a wash path and lone points. */
+function runsOf(points, key, px, py, base, withArea) {
+  const runs = [];
+  let run = [];
+  for (const p of points) {
+    const prev = run[run.length - 1];
+    if (p[key] == null || (prev && p.min - prev.min > MAX_GAP_MIN)) {
+      if (run.length) runs.push(run);
+      run = [];
+    }
+    if (p[key] != null) run.push(p);
+  }
+  if (run.length) runs.push(run);
+  let line = '';
+  let area = '';
+  const singles = [];
+  for (const r of runs) {
+    if (r.length === 1) {
+      singles.push(r[0]);
+      continue;
+    }
+    const d = r.map((p, i) => `${i ? 'L' : 'M'}${px(p.min)},${py(p[key])}`).join('');
+    line += d;
+    if (withArea) area += `M${px(r[0].min)},${base}L${d.slice(1)}L${px(r[r.length - 1].min)},${base}Z`;
+  }
+  return { line, area, singles };
+}
+
+/**
+ * One day's load on a fixed 00–24 h axis, so the empty right-hand part shows
+ * how much of the day is left: the station total with a faint wash, and each
+ * unit, under a legend. A hairline at full station load, faint 6-hourly ticks;
+ * readings more than 15 min apart are not joined. `points` are
+ * { min, u1, u2, stn } (minutes since 00:00), oldest first.
  * `active` / `onActive` ({ min, point } or null) drive the scrub crosshair so
  * the caller can show the readout.
  */
-export function DayCurve({ points, capacity, active, onActive, label, height = 96 }) {
+export function DayCurve({ points, capacity, active, onActive, label, height = 112 }) {
   const [ref, width] = useWidth();
   const washId = `wash${useId().replace(/:/g, '')}`;
   const top = 12;
@@ -240,7 +299,7 @@ export function DayCurve({ points, capacity, active, onActive, label, height = 9
   const plotH = height - top - bottom;
   const base = top + plotH;
   let peak = capacity;
-  for (const p of points) if (p.stn != null && p.stn > peak) peak = p.stn;
+  for (const p of points) for (const s of LOAD_SERIES) if (p[s.key] != null && p[s.key] > peak) peak = p[s.key];
   const x = (m) => (m / DAY_MIN) * width;
   const y = (v) => top + (1 - Math.max(0, v) / peak) * plotH;
 
@@ -248,30 +307,7 @@ export function DayCurve({ points, capacity, active, onActive, label, height = 9
     if (!width) return null;
     const px = (m) => ((m / DAY_MIN) * width).toFixed(1);
     const py = (v) => (top + (1 - Math.max(0, v) / peak) * plotH).toFixed(1);
-    const runs = [];
-    let run = [];
-    for (const p of points) {
-      const prev = run[run.length - 1];
-      if (p.stn == null || (prev && p.min - prev.min > MAX_GAP_MIN)) {
-        if (run.length) runs.push(run);
-        run = [];
-      }
-      if (p.stn != null) run.push(p);
-    }
-    if (run.length) runs.push(run);
-    let line = '';
-    let area = '';
-    const singles = [];
-    for (const r of runs) {
-      if (r.length === 1) {
-        singles.push(r[0]);
-        continue;
-      }
-      const d = r.map((p, i) => `${i ? 'L' : 'M'}${px(p.min)},${py(p.stn)}`).join('');
-      line += d;
-      area += `M${px(r[0].min)},${base}L${d.slice(1)}L${px(r[r.length - 1].min)},${base}Z`;
-    }
-    return { line, area, singles };
+    return LOAD_SERIES.map((s) => ({ s, ...runsOf(points, s.key, px, py, base, s.wash) }));
   }, [points, width, peak, plotH, base]);
 
   const end = points.length ? points[points.length - 1] : null;
@@ -312,22 +348,23 @@ export function DayCurve({ points, capacity, active, onActive, label, height = 9
             {capacity} MW
           </text>
           <line x1={0} x2={width} y1={base + 0.5} y2={base + 0.5} className="stroke-border" strokeWidth={1} />
-          <path d={marks.area} fill={`url(#${washId})`} />
-          <path d={marks.line} fill="none" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" className="stroke-foreground" />
-          {marks.singles.map((p) => (
-            <circle key={p.min} cx={x(p.min)} cy={y(p.stn)} r={1.5} className="fill-foreground" />
-          ))}
-          {end && end.stn != null && !active && (
-            <circle cx={x(end.min)} cy={y(end.stn)} r={4} strokeWidth={2} className="fill-foreground stroke-background" />
-          )}
-          {active && (
-            <g>
-              <line x1={x(active.min)} x2={x(active.min)} y1={top} y2={base} className="stroke-muted-foreground" strokeWidth={1} />
-              {active.point?.stn != null && (
-                <circle cx={x(active.min)} cy={y(active.point.stn)} r={4} strokeWidth={2} className="fill-foreground stroke-background" />
-              )}
+          {marks.map(({ s, area }) => area && <path key={s.key} d={area} fill={`url(#${washId})`} />)}
+          {marks.map(({ s, line, singles }) => (
+            <g key={s.key}>
+              <path d={line} fill="none" strokeWidth={s.width} strokeLinejoin="round" strokeLinecap="round" className={s.stroke} />
+              {singles.map((p) => (
+                <circle key={p.min} cx={x(p.min)} cy={y(p[s.key])} r={s.width} className={s.fill} />
+              ))}
             </g>
-          )}
+          ))}
+          {active && <line x1={x(active.min)} x2={x(active.min)} y1={top} y2={base} className="stroke-muted-foreground" strokeWidth={1} />}
+          {/* Where each line is now, or under the finger while scrubbing; a surface ring keeps touching dots apart. */}
+          {(active ? active.point : end) &&
+            LOAD_SERIES.map((s) => {
+              const p = active ? active.point : end;
+              if (p[s.key] == null) return null;
+              return <circle key={s.key} cx={x(p.min)} cy={y(p[s.key])} r={s.dot} strokeWidth={2} className={cn(s.fill, 'stroke-background')} />;
+            })}
           {DAY_TICKS.map((h, i) => (
             <text
               key={h}

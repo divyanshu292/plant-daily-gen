@@ -3,8 +3,11 @@ import { LightningIcon } from '@phosphor-icons/react';
 import { apiFetch } from '@/lib/api';
 import { MicroLabel } from '@/components/common/Text';
 import { TodayLoad, clockOf, hhmm } from '@/components/home/TodayLoad';
+import { LOAD_SERIES, SeriesSwatch } from '@/components/home/charts';
 import { fmtNum } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
+const [TOTAL, U1, U2] = LOAD_SERIES;
 
 const POLL_MS = 2_000;
 const FETCH_TIMEOUT_MS = 8_000;
@@ -179,8 +182,12 @@ function ScrubReadout({ scrub }) {
       <span>{p ? hhmm(p.at) : clockOf(scrub.min)} IST</span>
       {p ? (
         <span className="truncate">
+          <SeriesSwatch series={TOTAL} className="mr-1" />
           <span className="font-medium text-foreground">{p.stn != null ? `${fmtNum(p.stn, 1)} MW` : '—'}</span>
-          {' · '}U1 {fmtNum(p.u1, 1)} · U2 {fmtNum(p.u2, 1)}
+          {' · '}
+          <SeriesSwatch series={U1} className="mr-1" />U1 {fmtNum(p.u1, 1)}
+          {' · '}
+          <SeriesSwatch series={U2} className="mr-1" />U2 {fmtNum(p.u2, 1)}
         </span>
       ) : (
         <span>no reading</span>

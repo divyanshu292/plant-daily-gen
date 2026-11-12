@@ -49,6 +49,8 @@ export default {
           DEFAULT: 'hsl(var(--attention) / <alpha-value>)',
           foreground: 'hsl(var(--attention-foreground) / <alpha-value>)',
         },
+        'unit-1': 'hsl(var(--unit-1) / <alpha-value>)',
+        'unit-2': 'hsl(var(--unit-2) / <alpha-value>)',
       },
       borderRadius: {
         lg: 'var(--radius)',
