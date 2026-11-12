@@ -1,0 +1,229 @@
+{
+  "is_daily_system_report": true,
+  "report_date": "11/11/26",
+  "r01_load_0600": {
+    "unit1": "146",
+    "unit2": "154",
+    "station": "300"
+  },
+  "r01_load_0900": {
+    "unit1": "146",
+    "unit2": "154",
+    "station": "300"
+  },
+  "r02_load_max": {
+    "unit1_value": "154",
+    "unit1_time": "11:00",
+    "unit2_value": "167",
+    "unit2_time": "6:00"
+  },
+  "r02_load_min": {
+    "unit1_value": "141",
+    "unit1_time": "14:00",
+    "unit2_value": "146",
+    "unit2_time": "17:00"
+  },
+  "r03_freq_max": {
+    "value": "50.10",
+    "time": "20:00"
+  },
+  "r03_freq_min": {
+    "value": "49.40",
+    "time": "12:00"
+  },
+  "r04_gen": {
+    "unit1": "3.53",
+    "unit2": "3.79",
+    "station": "7.32"
+  },
+  "r05_plf": {
+    "unit1": "70.04",
+    "unit2": "75.20",
+    "station": "72.62"
+  },
+  "r06_paf": {
+    "unit1": "100.00",
+    "unit2": "100.00",
+    "station": "100.00"
+  },
+  "r07_coal": {
+    "unit1": "2496.00",
+    "unit2": "2770.40",
+    "station": "5266.40"
+  },
+  "r08_oil": {
+    "unit1": "0.00",
+    "unit2": "0.00",
+    "station": "0.00"
+  },
+  "r09_dm_water": {
+    "unit1": "113",
+    "unit1_pct": "0.68",
+    "unit2": "268",
+    "unit2_pct": "1.62",
+    "station": "381"
+  },
+  "r10_aux_power": {
+    "plant": "0.77397",
+    "plant_pct": "10.57",
+    "substation": "0.028",
+    "station": "0.8020"
+  },
+  "r11_outage": {
+    "unit1": "0:00:00",
+    "unit2": "0:00:00",
+    "station": "0:00:00"
+  },
+  "r12_sp_coal": {
+    "unit1": "0.707",
+    "unit2": "0.731",
+    "station": "0.719"
+  },
+  "r13_sp_oil": {
+    "unit1": "0.000",
+    "unit2": "0.000",
+    "station": "0.000"
+  },
+  "r14_h2": {
+    "unit1": "8",
+    "unit1_split": "5+3",
+    "unit2": "9",
+    "unit2_split": "7+2",
+    "station": "17"
+  },
+  "r15_backing_down": {
+    "unit1": "0.046",
+    "unit2": "0.084",
+    "station": "0.130"
+  },
+  "r16_prog_gen": {
+    "unit1": "35.19",
+    "unit2": "37.66",
+    "station": "72.85"
+  },
+  "r17_prog_plf": {
+    "unit1": "69.82",
+    "unit2": "74.72",
+    "station": "72.27"
+  },
+  "r18_prog_coal": {
+    "unit1": "25617.00",
+    "unit2": "29180.70",
+    "station": "54797.70"
+  },
+  "r19_prog_oil": {
+    "unit1": "0.00",
+    "unit2": "19.00",
+    "station": "19.00"
+  },
+  "r20_prog_dm_water": {
+    "unit1": "1122",
+    "unit2": "3395",
+    "station": "4517"
+  },
+  "r21_prog_aux_power": {
+    "plant": "7.784",
+    "plant_pct": "10.68",
+    "substation": "0.280",
+    "station": "8.064"
+  },
+  "r22_prog_outage": {
+    "unit1": "0:00:00",
+    "unit2": "0:35:00",
+    "station": "0:35:00"
+  },
+  "r23_prog_sp_coal": {
+    "unit1": "0.728",
+    "unit2": "0.775",
+    "station": "0.752"
+  },
+  "r24_prog_sp_oil": {
+    "unit1": "0.000",
+    "unit2": "0.505",
+    "station": "0.261"
+  },
+  "r25_prog_h2": {
+    "unit1": "74",
+    "unit2": "57",
+    "station": "131"
+  },
+  "r26_prog_backing_down": {
+    "unit1": "0.130",
+    "unit2": "0.236",
+    "station": "0.366"
+  },
+  "r27_coal_trips": {
+    "road": "0",
+    "rail": "1 (14)"
+  },
+  "r28_coal_transported": {
+    "road": "0.00",
+    "rail": "3852.40",
+    "total": "3852.40"
+  },
+  "r29_prog_coal_receipt": {
+    "road": "0.00",
+    "rail": "49672.44",
+    "total": "49672.44"
+  },
+  "r30_usable_coal_stock": "13007.25",
+  "r31_oil_transported": "0.000",
+  "r31_oil_in_pipeline": "13",
+  "r32_usable_oil_stock": "436.286",
+  "r32_prog_oil_receipt": "87.000",
+  "r33_load_flow": {
+    "pvunl": {
+      "max": "----",
+      "max_time": "----",
+      "min": "----",
+      "min_time": "----"
+    },
+    "biharsarif": {
+      "max": "128",
+      "max_time": "1:00",
+      "min": "0",
+      "min_time": "1:33"
+    },
+    "govindpur": {
+      "max": "139",
+      "max_time": "12:00",
+      "min": "73",
+      "min_time": "1:00"
+    }
+  },
+  "r34_pvunl": {
+    "exported": "0.0000",
+    "imported": "0.000",
+    "net_export": "0.0000",
+    "prog_export": "0.0000",
+    "prog_import": "0.0000",
+    "prog_net_export": "0.0000"
+  },
+  "r35_biharsarif": {
+    "exported": "0.22",
+    "imported": "0.00",
+    "net_export": "0.22",
+    "prog_export": "19.52",
+    "prog_import": "0.00",
+    "prog_net_export": "19.52"
+  },
+  "r36_govindpur": {
+    "exported": "6.298",
+    "imported": "0.00",
+    "net_export": "6.298",
+    "prog_export": "45.266",
+    "prog_import": "0.000",
+    "prog_net_export": "45.266"
+  },
+  "r37_total": {
+    "exported": "6.52",
+    "imported": "0.00",
+    "net_export": "6.52",
+    "prog_export": "64.79",
+    "prog_import": "0.00",
+    "prog_net_export": "64.79"
+  },
+  "r38_remarks_unit1": "On Load",
+  "r39_remarks_unit2": "On Load",
+  "unclear_cells": []
+}

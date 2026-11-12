@@ -10,7 +10,8 @@ ENV PYTHONUNBUFFERED=1 \
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY main.py .
+# main.py and the modules it imports (dev_server.py is excluded in .dockerignore).
+COPY *.py ./
 
 RUN useradd -m app && chown -R app:app /app
 USER app

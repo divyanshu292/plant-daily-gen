@@ -10,3 +10,9 @@ venv
 .DS_Store
 Dockerfile
 .dockerignore
+# dev and test only
+dev_server.py
+requirements-dev.txt
+pytest.ini
+tests
+.pytest_cache

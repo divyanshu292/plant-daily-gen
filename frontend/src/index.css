@@ -24,6 +24,9 @@
     --input: 0 0% 90%;
     --ring: 0 0% 9%;
     --radius: 0.625rem;
+    /* The one accent: things that need a person's attention (failed checks, missing days). */
+    --attention: 28 92% 36%;
+    --attention-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -46,6 +49,8 @@
     --border: 0 0% 14%;
     --input: 0 0% 18%;
     --ring: 0 0% 100%;
+    --attention: 38 92% 58%;
+    --attention-foreground: 0 0% 0%;
   }
 }
 

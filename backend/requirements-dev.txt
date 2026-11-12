@@ -1,0 +1,5 @@
+# Tests and dev_server.py. Not installed in the deployed image.
+-r requirements.txt
+pytest==9.2.0
+mongomock-motor==0.0.36
+mongomock==4.3.0

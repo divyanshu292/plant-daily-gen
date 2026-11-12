@@ -45,6 +45,10 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        attention: {
+          DEFAULT: 'hsl(var(--attention) / <alpha-value>)',
+          foreground: 'hsl(var(--attention-foreground) / <alpha-value>)',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -64,9 +68,14 @@ export default {
       },
       keyframes: {
         'fade-in': { from: { opacity: 0 }, to: { opacity: 1 } },
+        indeterminate: {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(300%)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.4s ease-out',
+        indeterminate: 'indeterminate 1.6s ease-in-out infinite',
       },
     },
   },

@@ -4,8 +4,11 @@
 *.env
 !.env.example
 !*.env.example
+# Scratch file that holds a live API key
+temp.txt
 .DS_Store
 node_modules/
 dist/
 __pycache__/
 .venv/
+.pytest_cache/
