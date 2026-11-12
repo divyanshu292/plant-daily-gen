@@ -166,7 +166,7 @@ export function TabBar({ screen, onNavigate, uploading, pendingReview }) {
       data-min={minimized}
       className={cn(
         'group glass fixed z-40 mx-auto max-w-[420px] rounded-full md:hidden',
-        'bottom-[calc(env(safe-area-inset-bottom)+var(--tabbar-gap))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))]',
+        'bottom-[var(--tabbar-bottom)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))]',
         'h-[62px] transition-[height] duration-300 ease-spring data-[min=true]:h-12 motion-reduce:transition-none'
       )}
     >

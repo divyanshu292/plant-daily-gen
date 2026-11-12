@@ -61,8 +61,11 @@
      --app-header-h is the sticky header's height (with its 1px border and the status-bar area);
      things that stick below it use `top-[var(--sticky-top)]` (see components/common/sticky.js). */
   :root {
-    --tabbar-gap: 10px;
-    --tabbar-h: calc(62px + var(--tabbar-gap) + env(safe-area-inset-bottom));
+    /* Like the iOS tab bar, the capsule reaches into the home-indicator area instead of
+       sitting above it: about 20px off the bottom on a Face ID iPhone (34px inset), 8px
+       on screens without one. */
+    --tabbar-bottom: max(8px, calc(env(safe-area-inset-bottom) - 14px));
+    --tabbar-h: calc(62px + var(--tabbar-bottom));
     --app-header-h: calc(3rem + 1px + env(safe-area-inset-top));
     --sticky-top: var(--app-header-h);
     color-scheme: light;
