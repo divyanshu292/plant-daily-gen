@@ -222,7 +222,7 @@ def test_every_api_route_needs_a_session():
 
 def test_data_needs_a_session(client):
     for path in ("/api/entries", "/api/reports", "/api/analytics", "/api/config/2026", "/api/auth/me",
-                 "/api/auth/activity", "/api/users"):
+                 "/api/auth/activity", "/api/users", "/api/logs"):
         response = client.get(path)
         assert response.status_code == 401, path
         assert response.json() == {"detail": "Sign in to continue"}

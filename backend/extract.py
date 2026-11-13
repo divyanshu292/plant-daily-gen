@@ -1,4 +1,8 @@
-"""Image -> DailySystemReport, using Gemini vision with a JSON response schema."""
+"""Image -> DailySystemReport, using Gemini vision with a JSON response schema.
+
+ask() and response_schema() are the call itself, shared with logbook.py, which
+sends pasted messages instead of an image.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +15,7 @@ from dataclasses import dataclass
 
 import httpx
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import ValidationError
+from pydantic import BaseModel
 
 from report_schema import DailySystemReport
 
@@ -141,10 +145,10 @@ def is_configured() -> bool:
     return bool(_api_key())
 
 
-def _response_schema() -> dict:
-    """The page model as the schema dialect Gemini accepts: no $ref, upper-case
-    types, and an explicit property order so cells come back in page order."""
-    source = DailySystemReport.model_json_schema()
+def response_schema(model: type[BaseModel]) -> dict:
+    """A pydantic model as the schema dialect Gemini accepts: no $ref, upper-case
+    types, and an explicit property order so fields come back in the order written."""
+    source = model.model_json_schema()
     defs = source.get("$defs", {})
 
     def convert(node: dict) -> dict:
@@ -156,6 +160,8 @@ def _response_schema() -> dict:
         out: dict = {"type": node["type"].upper()}
         if node.get("description"):
             out["description"] = node["description"]
+        if node.get("enum"):
+            out["enum"] = node["enum"]
         if node["type"] == "object":
             out["properties"] = {k: convert(v) for k, v in node["properties"].items()}
             out["required"] = list(node["properties"])
@@ -167,7 +173,7 @@ def _response_schema() -> dict:
     return convert(source)
 
 
-_SCHEMA = _response_schema()
+_SCHEMA = response_schema(DailySystemReport)
 _http: httpx.AsyncClient | None = None
 
 
@@ -216,15 +222,42 @@ async def _generate(model: str, body: dict) -> dict:
     raise ExtractionError(f"The reading service rejected the request: {message}", status=502)
 
 
-async def extract_report(im: Image.Image, recheck: list[str] | None = None, model: str | None = None) -> Extraction:
-    """Transcribe the report. `recheck` lists failed consistency checks from a
-    previous attempt so the model looks at those cells again."""
+async def ask(body: dict, parse, what: str, model: str | None = None) -> tuple:
+    """Send one request and return (parse(answer), model, usage).
+
+    `parse` turns the answer's text into what the caller wants and raises
+    ValueError when it cannot be used; like an overloaded model, that is worth
+    one more attempt. The models in MODELS are tried in order (or only `model`).
+    `what` names the input in messages for the person: "this image"."""
     if not is_configured():
         raise ExtractionError(
-            "GEMINI_API_KEY is not set on the server, so report images cannot be read. "
+            f"GEMINI_API_KEY is not set on the server, so {what} cannot be read. "
             "Add it to the .env file (or the hosting environment) and restart.",
             status=503,
         )
+    last = "The reading service failed."
+    for name in ([model] if model else MODELS):
+        for attempt in range(TRANSIENT_ATTEMPTS):
+            if attempt:
+                await asyncio.sleep(2)
+            try:
+                data = await _generate(name, body)
+                try:
+                    parsed = parse(_answer(data, what))
+                except ValueError as exc:  # pydantic's ValidationError is one
+                    raise _Transient("The reading service returned a malformed answer.") from exc
+                return parsed, data.get("modelVersion") or name, _usage(data)
+            except _Transient as exc:
+                last = str(exc)
+            except _NextModel as exc:
+                last = str(exc)
+                break
+    raise ExtractionError(f"{last} Try again in a minute.", status=502)
+
+
+async def extract_report(im: Image.Image, recheck: list[str] | None = None, model: str | None = None) -> Extraction:
+    """Transcribe the report. `recheck` lists failed consistency checks from a
+    previous attempt so the model looks at those cells again."""
     parts: list[dict] = [
         {"inlineData": {"mimeType": "image/jpeg", "data": base64.standard_b64encode(data).decode("ascii")}}
         for data in model_images(im)
@@ -249,45 +282,30 @@ async def extract_report(im: Image.Image, recheck: list[str] | None = None, mode
         },
     }
 
-    last = "The reading service failed."
-    for name in ([model] if model else MODELS):
-        for attempt in range(TRANSIENT_ATTEMPTS):
-            if attempt:
-                await asyncio.sleep(2)
-            try:
-                return _parse(await _generate(name, body), name)
-            except _Transient as exc:
-                last = str(exc)
-            except _NextModel as exc:
-                last = str(exc)
-                break
-    raise ExtractionError(f"{last} Try again in a minute.", status=502)
+    report, served, usage = await ask(body, DailySystemReport.model_validate_json, "this image", model)
+    return Extraction(report=report, model=served, usage=usage)
 
 
-def _parse(data: dict, model: str) -> Extraction:
-    """Turn a generateContent response into a report, or say why it cannot be used."""
+def _answer(data: dict, what: str) -> str:
+    """The text of a generateContent response, or why there is none to use."""
     blocked = (data.get("promptFeedback") or {}).get("blockReason")
     if blocked:
-        raise ExtractionError(f"The reading service declined to process this image ({blocked}).", status=422)
+        raise ExtractionError(f"The reading service declined to process {what} ({blocked}).", status=422)
     candidate = (data.get("candidates") or [{}])[0]
     finish = candidate.get("finishReason")
     answer = "".join(p.get("text", "") for p in (candidate.get("content") or {}).get("parts", [])
                      if not p.get("thought"))
     if finish == "SAFETY":
-        raise ExtractionError("The reading service declined to process this image.", status=422)
+        raise ExtractionError(f"The reading service declined to process {what}.", status=422)
     if finish != "STOP" or not answer:
-        raise _Transient(f"The reading service returned an incomplete transcription ({finish}).")
-    try:
-        report = DailySystemReport.model_validate_json(answer)
-    except ValidationError as exc:
-        raise _Transient("The reading service returned a malformed transcription.") from exc
+        raise _Transient(f"The reading service returned an incomplete answer ({finish}).")
+    return answer
+
+
+def _usage(data: dict) -> dict:
     usage = data.get("usageMetadata") or {}
-    return Extraction(
-        report=report,
-        model=data.get("modelVersion") or model,
-        usage={
-            "inputTokens": usage.get("promptTokenCount"),
-            "outputTokens": usage.get("candidatesTokenCount"),
-            "thinkingTokens": usage.get("thoughtsTokenCount"),
-        },
-    )
+    return {
+        "inputTokens": usage.get("promptTokenCount"),
+        "outputTokens": usage.get("candidatesTokenCount"),
+        "thinkingTokens": usage.get("thoughtsTokenCount"),
+    }

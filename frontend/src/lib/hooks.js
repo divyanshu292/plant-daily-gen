@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
-// ---- hash route: #/ (home), #/upload, #/daily/2026-11-03, #/data/2026-11, #/data/2026-11-03, #/users, #/account ----
+// ---- hash route: #/ (home), #/upload, #/daily/2026-11-03, #/data/2026-11, #/data/2026-11-03, #/logs/2026-11-12, #/users, #/account ----
 
 // Which of these a person may open depends on their role; App sends the rest home.
-export const SCREENS = ['home', 'upload', 'daily', 'data', 'users', 'account'];
+export const SCREENS = ['home', 'upload', 'daily', 'data', 'logs', 'users', 'account'];
 
 /** Anything that is not a known screen (#/, #/home, #/whatever) is the home screen. */
 function parseHash(hash) {

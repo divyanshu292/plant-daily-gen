@@ -1,0 +1,141 @@
+Good morning Sir🌹
+Tenughat TPS Generation Report on 12.11.2026
+Load at 6:00Hrs  
+U# 1: 154MW
+U# 2 : 154MW
+Gen.U#1=3.47MU           
+Gen.U#2=3.65MU 
+H2 Consu. U#1=4
+H2 Consu. U#2=6
+Purging:  U#1 =0
+Purging:  U#2=3
+PLF (U#1) =68.85%                                     PLF (U#2) =72.42%  
+Stn.PLF = 70.63%
+MCG/PLF=79.97MU/72.12% 
+YCG/PLF=1521.54MU/67.09%
+With best regards..
+-Shift Engineer
+
+12/11/2026 (Silo System)*
+
+*System Running Hours:-
+Unit#01:-
+Path-A =00:00 Hrs
+Path-B =  24:00 Hrs
+Unit#02:-
+Path -A = 13:00 Hrs
+Path -B =  00:00 Hrs
+*Dry Fly Ash Transportation:-*
+Silo#1(Bulkers)
+60 MT= 06 Nos and 40 MT= 10 Nos
+Silo#2(Bulkers)
+60 MT= 00 Nos and 40 MT= 00 Nos
+Total Bulkers loaded:-  16 Nos
+*Conditioned Ash Transportation-
+Silo#1 (Hywa): - 33 Nos 
+Silo#2(Hywa):- 05 Nos
+Total Hywa loaded: - 38 Nos
+*Level at 06:00 Hrs*
+Silo-1 = 04.80 M
+Silo-2= 07.87 M
+
+Chemical Report-
+ Date-: 12.11.2026   
+1.Boiler Silica
+           U#1=0.27
+           U#2=0.29
+2.Cation Conductivity-:
+           U#1= 0.21
+           U#2= Ext
+3.Hydrogen Dew point-:
+           U#1=  -
+           U#2= -9.3
+4.MOT
+           U#1= 81
+           U#2= 83
+5.Flue Gas
+    U#1(O2)
+Path A I/L=4.8, O/L=5.4
+Path B I/L=5.0, O/L=5.6
+    U#2 (O2)
+Path A  I/L=5.0, O/L=5.6
+Path B  I/L=5.2, O/L=5.8
+6.U/C  in Fly Ash:-
+    U#1=5.08(S.Blackish)
+    U#2=4.84(S.Blackish)
+7.U/C  in Bottom Ash:-
+    U#1=7.41(Blackish)
+    U#2=7.11(Blackish)
+8.GCV of coal= 3597
+      Date -: 10.11.2026
+
+9.Ash Water Ratio= 1:9
+
+10.TSS = 53 ppm
+
+M/S         Date-12/11/2026
+   
+*D.O.T  Level-2.98M
+*H.F.O  Pump Service-1A&2A
+*Pressure-1A-12Kg/Cm2&2A-12.5Kg/Cm2
+*Current-1A-18Amp&2A-23Amp
+*H.F.O Pump Available-1B&2B
+
+mill
+Unit1 M/S,. Date-12. 11.2026
+              
+Mill-1A
+L P discharge : 5.7
+HP suction :- 1.4
+HP discharge :-42, 36,  33, 41
+B&S:- 24/16
+Lub oil tem. : 45
+Flow :-26/29
+PA fan 1A Lop:-A -  1.18  Tem. :- 34
+Motor brg.tem. NDE:- 38     DE:-48
+Fan brg.tem.     NDE.:- 48    DE:-50
+Reducer oil pressure :- 1.5/4000
+Reducer oil tem.:- 71
+Main motor brg.tem.NDE:-51   DE:-51
+Grease pump pr.: 10.0/6.0
+Motor cooler tem.NDE.:-32    DE:-44
+Noise level Mill 1A:- 17 to 18  %
+
+Mill-1B
+LP-discharge : 3.3
+HP suction :- 1.48
+HP discharge :-49,48, 41, 42
+B&S:-21/31
+Lub oil tem. :-43
+Flow :-32/36
+  
+PA fan 1B  Lop:-A -  1.15   Tem. :- 28
+PA fan motor brg. NDE:- 36   DE:--50
+PA fan brg. Tem.   NDE.: 00   DE:-46
+Main motor tem.  NDE:- .38  DE:- 00
+Reducer oil pressure - 3.4/3000
+Reducer oil tem. :-41
+Motor cooler tem.NDE/DE:-00/00
+Grease pump pr.:- 9.0/6.5
+Noise Level mill 1B- 26  to 27 %
+
+M/S. Gr-c  12 - 11- 2026
+DG-01  U/M  oil level - 530  Ltr
+Time- 00 -00  to 00 -00  Hrs
+Volt- 00  Hz 00 
+DG-02 Trial run taken from.C.R. Diesel 
+oil level - 625  Ltr. 
+Time- 06-30  to  06-34
+Volt- 417.0  Hz-49.82
+
+A C W  
+M/S  12-11-2026
+Acw pump 1B service (29..A)
+Booster pump 1A service (248A)
+Unit# 01 CW 34-100 % Open
+                        56-100 %.   "
+Acw pump 2B service (33.5.A)
+Booster pump 2B service (245-A)"
+Unit#02 CW 34- 100 %  Open
+                        56-100 %      "
+Ash water pump  01 & 02  in service

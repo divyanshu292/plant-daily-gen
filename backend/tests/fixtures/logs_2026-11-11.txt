@@ -1,0 +1,137 @@
+UNIT-2
+Mill- 2A                                    11-11-2026
+
+LPD-Main-2.3/B.S-19,26/HPD- 30,41,45,41/HPS-Main-1.6/Temp-40
+
+PA FAN LOP -A-Press=1.1
+Temp=33
+P.A FAN Motor= NDE- 50/DE-49
+FAN Brg.Temp= DE-48/NDE-35
+
+Mill Main motor= DE-63/NDE-34
+
+Grease press=8.0 kg.   /Automising air pr.-6.8
+
+Reducer Flow- 42×100
+
+Press-2.0/ Temp.-70
+
+Flow-NDE-7×4/DE-7×4
+
+"""""""""""""""""""""""""""""""""""""""""""'"'"""
+   Mill-2C                      
+              
+LPD-Standby-3.1/B.S-22,31/HPD-38,40,30,31/HPS-Main-1.45/Temp-35
+
+PA FAN LOP-A-Press=1.1
+Temp=25
+P.A FAN Motor= NDE- 25/DE- 39
+FAN Brg.Temp= DE-51/NDE-44
+
+Mill Main motor= DE- 53/NDE- 47
+
+Grease press= 7.0 kg.   /Automising air pr.-0
+
+Reducer Flow- 42×100
+
+Press-1.2/ Temp.-75
+
+Flow-NDE-6×4/DE-7×4
+
+E.S.P - 2   11-11-2026    
+                                                            
+    m.a   k.v     m.a.  k.v     
+1A.00  05  1C.144 21        
+2A.00 32  2C 40. 03      
+3A.20 24  3C.00  28
+4A.140 34  4C30  27
+5A. 00  23 5C.140 25                                                                    
+6A.72  31 6C.80    34     
+7A.40 16  7C 140  40
+ 
+1B.40 00  1D. 70  25          
+2B.00 32  2D.00  08                  
+3B.00  00 3D.00 28  
+4B.40 26  4D.48  44     
+5B.00 00  5D.20  14
+6B.00 34  6D240 20
+7B. 00  29 7D00  26
+
+All E.E.R.M and C.E.R.M charged hopper heater are  charged.
+U/V-1A, 7A,1B,3B,5B,2C,2D,5D
+
+*UNIT-#02                  11-11-2026
+_ID Fan- 2 A_
+Motor bearing temp
+DE.__47 C
+NDE__42 C
+HYDRO COUPLING PR. /TEMP.__  0.70kg/46 C
+
+FAN BEARING TEMP.
+DE.__35 C
+NDE__46 C
+SCOOP_ 100
+
+_ID FAN 2 B_
+MOTOR BEARING TEMP
+DE --50 C
+NDE --45 C
+HYDRO COUPLING PR./TEMP --2.20KG/56 C
+
+FAN BEARING TEMP
+DE. --53 C
+NDE --47 C
+SCOOP --100
+_----------------_-------------- 
+_FD FAN 2 A_
+MOTOR BEARING TEMP
+DE --33 C
+NDE.-37  C
+FAN BEARING TEMP
+DE. --49  C
+NDE --37 C
+CONTROL OIL PR. --10.1KG
+LUBE OIL PR./TEMP -- 1.4 Kg/ 38 C
+
+_FD FAN 2 B_
+MOTOR BEARING TEMP
+DE. --30 C
+NDE. --27 C
+FAN BEARING TEMP
+DE --43 C
+NDE --50 C                     
+Control OIL PR.--9.5KG
+LUBE OIL PR./TEMP. -1.20KG/34C
+
+*Unit - 2*
+*Date 11/11/2026*
+*Stator Water Pressure = 2.8/1.0*
+*Stator Water Temp. = 36/41
+*CW Pressure I/L= 1.2/1.4
+*CW Temp. I/L = 26/----*    
+*CW Pressure O/L=0.3/0*
+*CW Temp. O/L= 40/37*
+
+*Unit-No - 02 Report*
+*Date -11/11/2026*
+
+EOP - 32A/5.2kg
+SOP DC 18.5A/10.3kg
+
+
+Working Oil Temp of BFP 2A=82°C
+Lube Oil Pr 2A = 2.8
+
+Working Oil Temp of BFP 2B = 67°C
+Lube Oil Pr 2B= 3.1
+
+Thrust Bearing Temp of CEP 2B :- 59°C
+
+*SOT Vacuum - 230*
+
+MOT Thrust  brg filter chocking - 50%
+Expansion Tank Vacuum:- -640
+S. O. Flow TE/EE - 38/26
+S.O.Temp. after Cooler- 46°C
+S. O. Exhaust fan in service -B
+Control Oil Pr= 8.4

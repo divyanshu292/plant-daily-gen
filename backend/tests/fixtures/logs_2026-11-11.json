@@ -1,0 +1,939 @@
+{
+ "sections": [
+  {
+   "form": "mill",
+   "tag": "2A",
+   "first_line": 2,
+   "last_line": 19,
+   "date_written": "11-11-2026",
+   "values": [
+    {
+     "key": "lp_pump",
+     "value": "Main",
+     "line": 4
+    },
+    {
+     "key": "lp_discharge",
+     "value": "2.3",
+     "line": 4
+    },
+    {
+     "key": "bs_1",
+     "value": "19",
+     "line": 4
+    },
+    {
+     "key": "bs_2",
+     "value": "26",
+     "line": 4
+    },
+    {
+     "key": "hp_discharge_1",
+     "value": "30",
+     "line": 4
+    },
+    {
+     "key": "hp_discharge_2",
+     "value": "41",
+     "line": 4
+    },
+    {
+     "key": "hp_discharge_3",
+     "value": "45",
+     "line": 4
+    },
+    {
+     "key": "hp_discharge_4",
+     "value": "41",
+     "line": 4
+    },
+    {
+     "key": "hp_pump",
+     "value": "Main",
+     "line": 4
+    },
+    {
+     "key": "hp_suction",
+     "value": "1.6",
+     "line": 4
+    },
+    {
+     "key": "lube_oil_temp",
+     "value": "40",
+     "line": 4
+    },
+    {
+     "key": "pa_lop",
+     "value": "A",
+     "line": 6
+    },
+    {
+     "key": "pa_lop_pressure",
+     "value": "1.1",
+     "line": 6
+    },
+    {
+     "key": "pa_lop_temp",
+     "value": "33",
+     "line": 7
+    },
+    {
+     "key": "pa_motor_nde",
+     "value": "50",
+     "line": 8
+    },
+    {
+     "key": "pa_motor_de",
+     "value": "49",
+     "line": 8
+    },
+    {
+     "key": "pa_fan_de",
+     "value": "48",
+     "line": 9
+    },
+    {
+     "key": "pa_fan_nde",
+     "value": "35",
+     "line": 9
+    },
+    {
+     "key": "motor_de",
+     "value": "63",
+     "line": 11
+    },
+    {
+     "key": "motor_nde",
+     "value": "34",
+     "line": 11
+    },
+    {
+     "key": "grease_pressure",
+     "value": "8.0",
+     "line": 13
+    },
+    {
+     "key": "atomising_air",
+     "value": "6.8",
+     "line": 13
+    },
+    {
+     "key": "reducer_flow",
+     "value": "42×100",
+     "line": 15
+    },
+    {
+     "key": "reducer_pressure",
+     "value": "2.0",
+     "line": 17
+    },
+    {
+     "key": "reducer_temp",
+     "value": "70",
+     "line": 17
+    },
+    {
+     "key": "flow_nde",
+     "value": "7×4",
+     "line": 19
+    },
+    {
+     "key": "flow_de",
+     "value": "7×4",
+     "line": 19
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "mill",
+   "tag": "2C",
+   "first_line": 22,
+   "last_line": 39,
+   "date_written": "11-11-2026",
+   "values": [
+    {
+     "key": "lp_pump",
+     "value": "Standby",
+     "line": 24
+    },
+    {
+     "key": "lp_discharge",
+     "value": "3.1",
+     "line": 24
+    },
+    {
+     "key": "bs_1",
+     "value": "22",
+     "line": 24
+    },
+    {
+     "key": "bs_2",
+     "value": "31",
+     "line": 24
+    },
+    {
+     "key": "hp_discharge_1",
+     "value": "38",
+     "line": 24
+    },
+    {
+     "key": "hp_discharge_2",
+     "value": "40",
+     "line": 24
+    },
+    {
+     "key": "hp_discharge_3",
+     "value": "30",
+     "line": 24
+    },
+    {
+     "key": "hp_discharge_4",
+     "value": "31",
+     "line": 24
+    },
+    {
+     "key": "hp_pump",
+     "value": "Main",
+     "line": 24
+    },
+    {
+     "key": "hp_suction",
+     "value": "1.45",
+     "line": 24
+    },
+    {
+     "key": "lube_oil_temp",
+     "value": "35",
+     "line": 24
+    },
+    {
+     "key": "pa_lop",
+     "value": "A",
+     "line": 26
+    },
+    {
+     "key": "pa_lop_pressure",
+     "value": "1.1",
+     "line": 26
+    },
+    {
+     "key": "pa_lop_temp",
+     "value": "25",
+     "line": 27
+    },
+    {
+     "key": "pa_motor_nde",
+     "value": "25",
+     "line": 28
+    },
+    {
+     "key": "pa_motor_de",
+     "value": "39",
+     "line": 28
+    },
+    {
+     "key": "pa_fan_de",
+     "value": "51",
+     "line": 29
+    },
+    {
+     "key": "pa_fan_nde",
+     "value": "44",
+     "line": 29
+    },
+    {
+     "key": "motor_de",
+     "value": "53",
+     "line": 31
+    },
+    {
+     "key": "motor_nde",
+     "value": "47",
+     "line": 31
+    },
+    {
+     "key": "grease_pressure",
+     "value": "7.0",
+     "line": 33
+    },
+    {
+     "key": "atomising_air",
+     "value": "0",
+     "line": 33
+    },
+    {
+     "key": "reducer_flow",
+     "value": "42×100",
+     "line": 35
+    },
+    {
+     "key": "reducer_pressure",
+     "value": "1.2",
+     "line": 37
+    },
+    {
+     "key": "reducer_temp",
+     "value": "75",
+     "line": 37
+    },
+    {
+     "key": "flow_nde",
+     "value": "6×4",
+     "line": 39
+    },
+    {
+     "key": "flow_de",
+     "value": "7×4",
+     "line": 39
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "esp",
+   "tag": "2",
+   "first_line": 41,
+   "last_line": 61,
+   "date_written": "11-11-2026",
+   "values": [
+    {
+     "key": "1a_ma",
+     "value": "00",
+     "line": 44
+    },
+    {
+     "key": "1a_kv",
+     "value": "05",
+     "line": 44
+    },
+    {
+     "key": "1c_ma",
+     "value": "144",
+     "line": 44
+    },
+    {
+     "key": "1c_kv",
+     "value": "21",
+     "line": 44
+    },
+    {
+     "key": "2a_ma",
+     "value": "00",
+     "line": 45
+    },
+    {
+     "key": "2a_kv",
+     "value": "32",
+     "line": 45
+    },
+    {
+     "key": "2c_ma",
+     "value": "40",
+     "line": 45
+    },
+    {
+     "key": "2c_kv",
+     "value": "03",
+     "line": 45
+    },
+    {
+     "key": "3a_ma",
+     "value": "20",
+     "line": 46
+    },
+    {
+     "key": "3a_kv",
+     "value": "24",
+     "line": 46
+    },
+    {
+     "key": "3c_ma",
+     "value": "00",
+     "line": 46
+    },
+    {
+     "key": "3c_kv",
+     "value": "28",
+     "line": 46
+    },
+    {
+     "key": "4a_ma",
+     "value": "140",
+     "line": 47
+    },
+    {
+     "key": "4a_kv",
+     "value": "34",
+     "line": 47
+    },
+    {
+     "key": "4c_ma",
+     "value": "30",
+     "line": 47
+    },
+    {
+     "key": "4c_kv",
+     "value": "27",
+     "line": 47
+    },
+    {
+     "key": "5a_ma",
+     "value": "00",
+     "line": 48
+    },
+    {
+     "key": "5a_kv",
+     "value": "23",
+     "line": 48
+    },
+    {
+     "key": "5c_ma",
+     "value": "140",
+     "line": 48
+    },
+    {
+     "key": "5c_kv",
+     "value": "25",
+     "line": 48
+    },
+    {
+     "key": "6a_ma",
+     "value": "72",
+     "line": 49
+    },
+    {
+     "key": "6a_kv",
+     "value": "31",
+     "line": 49
+    },
+    {
+     "key": "6c_ma",
+     "value": "80",
+     "line": 49
+    },
+    {
+     "key": "6c_kv",
+     "value": "34",
+     "line": 49
+    },
+    {
+     "key": "7a_ma",
+     "value": "40",
+     "line": 50
+    },
+    {
+     "key": "7a_kv",
+     "value": "16",
+     "line": 50
+    },
+    {
+     "key": "7c_ma",
+     "value": "140",
+     "line": 50
+    },
+    {
+     "key": "7c_kv",
+     "value": "40",
+     "line": 50
+    },
+    {
+     "key": "1b_ma",
+     "value": "40",
+     "line": 52
+    },
+    {
+     "key": "1b_kv",
+     "value": "00",
+     "line": 52
+    },
+    {
+     "key": "1d_ma",
+     "value": "70",
+     "line": 52
+    },
+    {
+     "key": "1d_kv",
+     "value": "25",
+     "line": 52
+    },
+    {
+     "key": "2b_ma",
+     "value": "00",
+     "line": 53
+    },
+    {
+     "key": "2b_kv",
+     "value": "32",
+     "line": 53
+    },
+    {
+     "key": "2d_ma",
+     "value": "00",
+     "line": 53
+    },
+    {
+     "key": "2d_kv",
+     "value": "08",
+     "line": 53
+    },
+    {
+     "key": "3b_ma",
+     "value": "00",
+     "line": 54
+    },
+    {
+     "key": "3b_kv",
+     "value": "00",
+     "line": 54
+    },
+    {
+     "key": "3d_ma",
+     "value": "00",
+     "line": 54
+    },
+    {
+     "key": "3d_kv",
+     "value": "28",
+     "line": 54
+    },
+    {
+     "key": "4b_ma",
+     "value": "40",
+     "line": 55
+    },
+    {
+     "key": "4b_kv",
+     "value": "26",
+     "line": 55
+    },
+    {
+     "key": "4d_ma",
+     "value": "48",
+     "line": 55
+    },
+    {
+     "key": "4d_kv",
+     "value": "44",
+     "line": 55
+    },
+    {
+     "key": "5b_ma",
+     "value": "00",
+     "line": 56
+    },
+    {
+     "key": "5b_kv",
+     "value": "00",
+     "line": 56
+    },
+    {
+     "key": "5d_ma",
+     "value": "20",
+     "line": 56
+    },
+    {
+     "key": "5d_kv",
+     "value": "14",
+     "line": 56
+    },
+    {
+     "key": "6b_ma",
+     "value": "00",
+     "line": 57
+    },
+    {
+     "key": "6b_kv",
+     "value": "34",
+     "line": 57
+    },
+    {
+     "key": "6d_ma",
+     "value": "240",
+     "line": 57
+    },
+    {
+     "key": "6d_kv",
+     "value": "20",
+     "line": 57
+    },
+    {
+     "key": "7b_ma",
+     "value": "00",
+     "line": 58
+    },
+    {
+     "key": "7b_kv",
+     "value": "29",
+     "line": 58
+    },
+    {
+     "key": "7d_ma",
+     "value": "00",
+     "line": 58
+    },
+    {
+     "key": "7d_kv",
+     "value": "26",
+     "line": 58
+    },
+    {
+     "key": "under_voltage",
+     "value": "1A, 7A,1B,3B,5B,2C,2D,5D",
+     "line": 61
+    },
+    {
+     "key": "remarks",
+     "value": "All E.E.R.M and C.E.R.M charged hopper heater are charged.",
+     "line": 60
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "id_fan",
+   "tag": "2A",
+   "first_line": 63,
+   "last_line": 73,
+   "date_written": "11-11-2026",
+   "values": [
+    {
+     "key": "motor_de",
+     "value": "47",
+     "line": 66
+    },
+    {
+     "key": "motor_nde",
+     "value": "42",
+     "line": 67
+    },
+    {
+     "key": "coupling_pressure",
+     "value": "0.70",
+     "line": 68
+    },
+    {
+     "key": "coupling_temp",
+     "value": "46",
+     "line": 68
+    },
+    {
+     "key": "fan_de",
+     "value": "35",
+     "line": 71
+    },
+    {
+     "key": "fan_nde",
+     "value": "46",
+     "line": 72
+    },
+    {
+     "key": "scoop",
+     "value": "100",
+     "line": 73
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "id_fan",
+   "tag": "2B",
+   "first_line": 75,
+   "last_line": 84,
+   "date_written": "11-11-2026",
+   "values": [
+    {
+     "key": "motor_de",
+     "value": "50",
+     "line": 77
+    },
+    {
+     "key": "motor_nde",
+     "value": "45",
+     "line": 78
+    },
+    {
+     "key": "coupling_pressure",
+     "value": "2.20",
+     "line": 79
+    },
+    {
+     "key": "coupling_temp",
+     "value": "56",
+     "line": 79
+    },
+    {
+     "key": "fan_de",
+     "value": "53",
+     "line": 82
+    },
+    {
+     "key": "fan_nde",
+     "value": "47",
+     "line": 83
+    },
+    {
+     "key": "scoop",
+     "value": "100",
+     "line": 84
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "fd_fan",
+   "tag": "2A",
+   "first_line": 86,
+   "last_line": 94,
+   "date_written": "11-11-2026",
+   "values": [
+    {
+     "key": "motor_de",
+     "value": "33",
+     "line": 88
+    },
+    {
+     "key": "motor_nde",
+     "value": "37",
+     "line": 89
+    },
+    {
+     "key": "fan_de",
+     "value": "49",
+     "line": 91
+    },
+    {
+     "key": "fan_nde",
+     "value": "37",
+     "line": 92
+    },
+    {
+     "key": "control_oil_pressure",
+     "value": "10.1",
+     "line": 93
+    },
+    {
+     "key": "lube_oil_pressure",
+     "value": "1.4",
+     "line": 94
+    },
+    {
+     "key": "lube_oil_temp",
+     "value": "38",
+     "line": 94
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "fd_fan",
+   "tag": "2B",
+   "first_line": 96,
+   "last_line": 104,
+   "date_written": "11-11-2026",
+   "values": [
+    {
+     "key": "motor_de",
+     "value": "30",
+     "line": 98
+    },
+    {
+     "key": "motor_nde",
+     "value": "27",
+     "line": 99
+    },
+    {
+     "key": "fan_de",
+     "value": "43",
+     "line": 101
+    },
+    {
+     "key": "fan_nde",
+     "value": "50",
+     "line": 102
+    },
+    {
+     "key": "control_oil_pressure",
+     "value": "9.5",
+     "line": 103
+    },
+    {
+     "key": "lube_oil_pressure",
+     "value": "1.20",
+     "line": 104
+    },
+    {
+     "key": "lube_oil_temp",
+     "value": "34",
+     "line": 104
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "stator_cw",
+   "tag": "2",
+   "first_line": 106,
+   "last_line": 113,
+   "date_written": "11/11/2026",
+   "values": [
+    {
+     "key": "stator_pressure_1",
+     "value": "2.8",
+     "line": 108
+    },
+    {
+     "key": "stator_pressure_2",
+     "value": "1.0",
+     "line": 108
+    },
+    {
+     "key": "stator_temp_1",
+     "value": "36",
+     "line": 109
+    },
+    {
+     "key": "stator_temp_2",
+     "value": "41",
+     "line": 109
+    },
+    {
+     "key": "cw_in_pressure_1",
+     "value": "1.2",
+     "line": 110
+    },
+    {
+     "key": "cw_in_pressure_2",
+     "value": "1.4",
+     "line": 110
+    },
+    {
+     "key": "cw_in_temp_1",
+     "value": "26",
+     "line": 111
+    },
+    {
+     "key": "cw_in_temp_2",
+     "value": "----",
+     "line": 111
+    },
+    {
+     "key": "cw_out_pressure_1",
+     "value": "0.3",
+     "line": 112
+    },
+    {
+     "key": "cw_out_pressure_2",
+     "value": "0",
+     "line": 112
+    },
+    {
+     "key": "cw_out_temp_1",
+     "value": "40",
+     "line": 113
+    },
+    {
+     "key": "cw_out_temp_2",
+     "value": "37",
+     "line": 113
+    }
+   ],
+   "extra": []
+  },
+  {
+   "form": "turbine",
+   "tag": "2",
+   "first_line": 115,
+   "last_line": 137,
+   "date_written": "11/11/2026",
+   "values": [
+    {
+     "key": "eop_current",
+     "value": "32",
+     "line": 118
+    },
+    {
+     "key": "eop_pressure",
+     "value": "5.2",
+     "line": 118
+    },
+    {
+     "key": "sop_current",
+     "value": "18.5",
+     "line": 119
+    },
+    {
+     "key": "sop_pressure",
+     "value": "10.3",
+     "line": 119
+    },
+    {
+     "key": "bfp_a_oil_temp",
+     "value": "82",
+     "line": 122
+    },
+    {
+     "key": "bfp_a_lube_pressure",
+     "value": "2.8",
+     "line": 123
+    },
+    {
+     "key": "bfp_b_oil_temp",
+     "value": "67",
+     "line": 125
+    },
+    {
+     "key": "bfp_b_lube_pressure",
+     "value": "3.1",
+     "line": 126
+    },
+    {
+     "key": "cep_b_thrust_temp",
+     "value": "59",
+     "line": 128
+    },
+    {
+     "key": "sot_vacuum",
+     "value": "230",
+     "line": 130
+    },
+    {
+     "key": "mot_filter_choking",
+     "value": "50",
+     "line": 132
+    },
+    {
+     "key": "expansion_tank_vacuum",
+     "value": "-640",
+     "line": 133
+    },
+    {
+     "key": "seal_oil_flow_te",
+     "value": "38",
+     "line": 134
+    },
+    {
+     "key": "seal_oil_flow_ee",
+     "value": "26",
+     "line": 134
+    },
+    {
+     "key": "seal_oil_temp",
+     "value": "46",
+     "line": 135
+    },
+    {
+     "key": "seal_oil_exhaust_fan",
+     "value": "B",
+     "line": 136
+    },
+    {
+     "key": "control_oil_pressure",
+     "value": "8.4",
+     "line": 137
+    }
+   ],
+   "extra": []
+  }
+ ]
+}

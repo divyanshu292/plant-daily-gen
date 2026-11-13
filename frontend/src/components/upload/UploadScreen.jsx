@@ -95,7 +95,7 @@ export function UploadScreen({ queue, health, navigate }) {
           <p className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
             <InfoIcon weight="fill" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              The page reader is not configured on this server (no ANTHROPIC_API_KEY). A development server answers with
+              The page reader is not configured on this server (no GEMINI_API_KEY). A development server answers with
               sample pages; anywhere else uploads will fail until the key is set.
             </span>
           </p>

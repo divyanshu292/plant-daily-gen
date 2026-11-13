@@ -8,6 +8,8 @@ import { UploadScreen } from '@/components/upload/UploadScreen';
 import { useUploadQueue } from '@/components/upload/useUploadQueue';
 import { DailyScreen } from '@/components/daily/DailyScreen';
 import { DataScreen } from '@/components/data/DataScreen';
+import { LogsScreen } from '@/components/logs/LogsScreen';
+import { useLogQueue } from '@/components/logs/useLogQueue';
 import { AccountScreen } from '@/components/account/AccountScreen';
 import { UsersScreen } from '@/components/users/UsersScreen';
 import { useAuth } from '@/lib/auth';
@@ -29,6 +31,7 @@ export default function App() {
 
   const health = useApiData('/health');
   const queue = useUploadQueue();
+  const logQueue = useLogQueue();
 
   // A saved upload or review can move the latest date.
   const firstVersion = useRef(queue.version);
@@ -36,16 +39,17 @@ export default function App() {
     if (queue.version !== firstVersion.current) health.reload();
   }, [queue.version, health.reload]);
 
-  // Warn before leaving while a page is still being read.
+  // Warn before leaving while a page or pasted messages are still being read.
+  const reading = queue.busy || logQueue.busy;
   useEffect(() => {
-    if (!queue.busy) return undefined;
+    if (!reading) return undefined;
     const warn = (e) => {
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [queue.busy]);
+  }, [reading]);
 
   // New screen starts at the top.
   useEffect(() => {
@@ -94,6 +98,7 @@ export default function App() {
         {route.screen === 'data' && (
           <DataScreen arg={route.arg} health={health} navigate={navigate} backTo={backTo} onDataChanged={health.reload} />
         )}
+        {route.screen === 'logs' && <LogsScreen arg={route.arg} health={health} navigate={navigate} queue={logQueue} />}
         {route.screen === 'users' && isSuperAdmin && <UsersScreen />}
         {route.screen === 'account' && <AccountScreen />}
 

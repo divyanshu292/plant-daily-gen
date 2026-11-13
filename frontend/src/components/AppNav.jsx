@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  ClipboardTextIcon,
   CloudArrowUpIcon,
   DatabaseIcon,
   FileTextIcon,
@@ -19,11 +20,12 @@ const NAV = [
   { screen: 'upload', label: 'Upload', short: 'Upload', icon: CloudArrowUpIcon, need: 'edit' },
   { screen: 'daily', label: 'Daily report', short: 'Report', icon: FileTextIcon },
   { screen: 'data', label: 'Data', short: 'Data', icon: DatabaseIcon },
+  { screen: 'logs', label: 'Logs', short: 'Logs', icon: ClipboardTextIcon },
   { screen: 'users', label: 'Users', short: 'Users', icon: UsersThreeIcon, need: 'superAdmin' },
   { screen: 'account', label: 'Account', short: 'Account', icon: UserCircleIcon },
 ];
 
-/** The tabs a person has: 4 for a viewer, 5 for an admin, 6 for the super admin. */
+/** The tabs a person has: 5 for a viewer, 6 for an admin, 7 for the super admin. */
 export function navFor({ canEdit, isSuperAdmin }) {
   return NAV.filter((n) => (n.need === 'edit' ? canEdit : n.need === 'superAdmin' ? isSuperAdmin : true));
 }
@@ -171,7 +173,7 @@ function useMinimizeOnScroll() {
  */
 export function TabBar({ items, screen, onNavigate, uploading, pendingReview }) {
   const [minimized, setMinimized] = useMinimizeOnScroll();
-  const count = items.length; // 4 to 6, by role
+  const count = items.length; // 5 to 7, by role
   const index = Math.max(0, items.findIndex((n) => n.screen === screen));
   const go = (s) => {
     setMinimized(false);
@@ -216,11 +218,13 @@ export function TabBar({ items, screen, onNavigate, uploading, pendingReview }) 
                     <UploadDot uploading={uploading} pendingReview={pendingReview} className="-right-1 -top-0.5" />
                   )}
                 </span>
-                {/* Six tabs leave about 46 px each on a 320 px phone: one line, clipped rather than wrapped. */}
+                {/* Seven tabs leave about 40 px each on a 320 px phone: one line, clipped rather than wrapped. */}
                 <span
                   className={cn(
                     'mt-[3px] max-h-3 max-w-full overflow-hidden whitespace-nowrap px-0.5 text-[10px] font-medium leading-3 tracking-normal transition-[opacity,max-height,margin] duration-300 ease-spring',
                     'group-data-[min=true]:mt-0 group-data-[min=true]:max-h-0 group-data-[min=true]:opacity-0 motion-reduce:transition-none',
+                    // Seven tabs on the narrowest phones: a touch smaller, so "Account" is not cut short.
+                    count >= 7 && 'max-[359px]:text-[9px] max-[359px]:tracking-tight',
                     active && 'font-semibold'
                   )}
                 >

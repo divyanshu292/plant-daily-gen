@@ -34,6 +34,8 @@ import auth  # noqa: E402
 import calc  # noqa: E402
 import extract  # noqa: E402
 import live  # noqa: E402
+import logbook  # noqa: E402
+import logbook_forms  # noqa: E402
 import workbook_import  # noqa: E402
 from validate import cross_checks, validate  # noqa: E402
 
@@ -75,6 +77,10 @@ LIVE_TTL_INDEX = "ts_ttl"
 LIVE_URL = "https://tpro.telsys.in/tpportal/power_generation?param=ajax_call&status_check=true"
 LIVE_CACHE_TTL_S = 3
 LIVE_COLLECTION = "live_readings"
+# Readings from pasted WhatsApp messages (logbook.py): one record per day and section.
+LOGS_COLLECTION = "logs"
+# How far back to look for "the last day this section was reported" to compare with.
+LOGS_LOOKBACK_DAYS = 45
 
 client: Optional[AsyncIOMotorClient] = None
 # Opened on first use. dev_server.py and the tests put an in-memory database here.
@@ -118,6 +124,8 @@ _indexed_db = None
 #                  one day or one month, newest first (Daily report)   -> dataDate, createdAt
 #   config         one fiscal year                                     -> fy
 #   live_readings  one IST day by time; the latest reading             -> ts (its TTL index)
+#   logs           one day's sections; one section on earlier days;
+#                  the latest, next and previous day with readings     -> date, section
 #   users          one user by id (user management)                    -> id
 #                  by email (sign-in; unique, so no duplicate accounts) -> email
 #                  by session (every signed-in request)                -> sessions.hash
@@ -131,6 +139,7 @@ INDEXES = {
         IndexModel([("dataDate", ASCENDING), ("createdAt", DESCENDING)]),
     ],
     "config": [IndexModel([("fy", ASCENDING)], unique=True)],
+    LOGS_COLLECTION: [IndexModel([("date", ASCENDING), ("section", ASCENDING)], unique=True)],
     "users": [
         IndexModel([("id", ASCENDING)], unique=True),
         IndexModel([("email", ASCENDING)], unique=True),
@@ -824,6 +833,166 @@ async def live_day(day: Optional[str] = Query(None, alias="date")):
     """One IST day of recorded readings (default today): load curve, energy,
     PLF, projection, trips. Shape: live.summarize()."""
     return await _live_day(_check_date(day) if day else _today())
+
+
+# --- readings from pasted WhatsApp messages ------------------------------------------------
+#
+# A feature of its own: its own collection (logs) and nothing shared with the
+# daily entries or the report pages. logbook_forms.py is the fixed set of keys,
+# logbook.py reads a paste into it and sets one day beside another.
+
+async def _logs_day(on: str, other: Optional[str] = None) -> dict:
+    """One day's sections, each beside the same section on another day: `other`
+    when given, else the last earlier day that section was reported."""
+    logs = _db()[LOGS_COLLECTION]
+    one_date = {"_id": 0, "date": 1}
+    records, latest, earlier, later = await asyncio.gather(
+        logs.find({"date": on}, {"_id": 0}).to_list(length=None),
+        logs.find_one({}, one_date, sort=[("date", -1)]),
+        logs.find_one({"date": {"$lt": on}}, one_date, sort=[("date", -1)]),
+        logs.find_one({"date": {"$gt": on}}, one_date, sort=[("date", 1)]),
+    )
+    present = [r["section"] for r in records]
+    before = other or (earlier or {}).get("date")
+    previous: dict[str, dict] = {}
+    absent: list[dict] = []
+    if before:
+        if other:
+            span = {"date": other}
+        else:
+            start = date.fromisoformat(on) - timedelta(days=LOGS_LOOKBACK_DAYS)
+            span = {"date": {"$lt": on, "$gte": start.isoformat()}}
+        slim = {"_id": 0, "date": 1, "section": 1, "form": 1, "tag": 1, "values": 1}
+        async for doc in logs.find({**span, "section": {"$in": present}}, slim).sort("date", -1):
+            previous.setdefault(doc["section"], doc)
+        # Reported on the day before this one (or on `other`) and not today: a message that has not come.
+        slim.pop("values")
+        missing = await logs.find({"date": before, "section": {"$nin": present}}, slim).to_list(length=None)
+        absent = [{"id": m["section"], "name": logbook.title(m), "date": m["date"]}
+                  for m in sorted(missing, key=logbook.order) if m.get("form") != logbook_forms.OTHER]
+    return {
+        "date": on,
+        "with": other,
+        "latest": (latest or {}).get("date"),
+        "earlier": (earlier or {}).get("date"),
+        "later": (later or {}).get("date"),
+        "sections": [logbook.compare(r, previous.get(r["section"])) for r in sorted(records, key=logbook.order)],
+        "absent": absent,
+    }
+
+
+@app.get("/api/logs", dependencies=[Depends(require_user)])
+async def get_logs(day: Optional[str] = Query(None, alias="date"), other: Optional[str] = Query(None, alias="with")):
+    """A day's readings (default: the latest day that has any), compared with
+    `with` (YYYY-MM-DD) or else with the last earlier day each section was reported."""
+    if day:
+        on = _check_date(day).isoformat()
+    else:
+        latest = await _db()[LOGS_COLLECTION].find_one({}, {"_id": 0, "date": 1}, sort=[("date", -1)])
+        on = latest["date"] if latest else _today().isoformat()
+    return await _logs_day(on, _check_date(other).isoformat() if other else None)
+
+
+@app.post("/api/logs")
+async def paste_logs(payload: dict, user: dict = Depends(require_editor)):
+    """Read pasted WhatsApp messages into the fixed set of keys and store them.
+
+    A day comes in several pastes, in pieces. Each message is filed under the
+    date written in it (or its WhatsApp stamp); `date` (default today) is only
+    for a piece that carries neither. What a paste brings is added to what the
+    day already has for each section: see logbook.update."""
+    text = payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(400, "Paste the messages first")
+    if len(text) > logbook.MAX_CHARS:
+        raise HTTPException(413, f"That is {len(text):,} characters; the limit is {logbook.MAX_CHARS:,}. "
+                                 "Paste the messages a few at a time: they are put together by their dates.")
+    today = _today()
+    fallback = _check_date(payload["date"]) if payload.get("date") else today
+    if fallback > today + timedelta(days=1):
+        raise HTTPException(400, "That day has not come yet")
+
+    lines = logbook.number_lines(text)
+    if logbook.too_long(lines):
+        raise HTTPException(413, "That is more than can be read in one go. Paste the messages a few at a time: "
+                                 "they are put together by their dates.")
+    try:
+        paste, model, usage = await logbook.read(lines)
+    except extract.ExtractionError as exc:
+        raise HTTPException(exc.status, str(exc))
+    records, notes = logbook.records(paste, lines, fallback, today)
+    if not records:
+        raise HTTPException(422, "No readings were found in what was pasted.")
+
+    await _ensure_indexes()
+    logs = _db()[LOGS_COLLECTION]
+    stamp = {"updatedAt": _now(), "updatedBy": {"id": user["id"], "name": user["name"]}, "model": model}
+    days: dict[str, dict] = {}
+    for record in records:
+        # Added to what the day already has for the section: see logbook.update.
+        await logs.update_one({"date": record["date"], "section": record["section"]},
+                              logbook.update(record, stamp), upsert=True)
+        day = days.setdefault(record["date"], {"date": record["date"], "sections": 0, "values": 0, "toCheck": 0,
+                                               "undated": 0})
+        day["sections"] += 1
+        day["values"] += len(record["values"]) + len(record["extra"])
+        day["toCheck"] += logbook.to_check(record)
+        day["undated"] += not record["dated"]
+    summary = sorted(days.values(), key=lambda d: d["date"])
+    values = sum(d["values"] for d in summary)
+    await _log(user["id"], "logs_pasted",
+               f"Pasted readings for {' and '.join(_day_label(d['date']) for d in summary)}: {values} values")
+    return {"days": summary, "notes": notes, "model": model, "usage": usage}
+
+
+async def _log_section(date_str: str, section: str) -> dict:
+    record = await _db()[LOGS_COLLECTION].find_one({"date": _check_date(date_str).isoformat(), "section": section},
+                                                   {"_id": 0})
+    if not record:
+        raise HTTPException(404, "No readings are stored for that section on that day")
+    return record
+
+
+@app.put("/api/logs/{date_str}/{section}")
+async def edit_log(date_str: str, section: str, payload: dict, user: dict = Depends(require_editor)):
+    """Correct one value by hand, {"key": ..., "value": ...} (a blank value
+    removes it), or say the section has been looked at, {"checked": true},
+    which clears what was marked for checking."""
+    record = await _log_section(date_str, section)
+    where = {"date": record["date"], "section": section}
+    stamp = {"updatedAt": _now(), "updatedBy": {"id": user["id"], "name": user["name"]}}
+    name, day = logbook.title(record), _day_label(record["date"])
+    if payload.get("checked") is True:
+        if logbook.to_check(record):
+            await _db()[LOGS_COLLECTION].update_one(where, {"$set": {**stamp, "checks": {}, "missed": []}})
+            await _log(user["id"], "logs_edited", f"Checked {name} readings for {day}")
+    else:
+        form = logbook_forms.BY_KEY.get(record.get("form"))
+        field = form.field(payload.get("key")) if form and isinstance(payload.get("key"), str) else None
+        if field is None:
+            raise HTTPException(400, "That is not one of this section's fields")
+        value = logbook.clip(payload.get("value"), logbook.VALUE_MAX)
+        if (record.get("values") or {}).get(field.key) != (value or None):
+            change: dict = {
+                # The number typed is no longer one the reading passed over.
+                "$set": {**stamp, "missed": logbook.without_number(record.get("missed") or [], value)},
+                "$unset": {f"checks.{field.key}": "", f"src.{field.key}": ""},
+                "$addToSet": {"edited": field.key},
+            }
+            change["$set" if value else "$unset"][f"values.{field.key}"] = value
+            await _db()[LOGS_COLLECTION].update_one(where, change)
+            await _log(user["id"], "logs_edited", f"Edited {name} readings for {day}: {field.label}")
+    return await _logs_day(record["date"], _check_date(payload["with"]).isoformat() if payload.get("with") else None)
+
+
+@app.delete("/api/logs/{date_str}/{section}")
+async def delete_log(date_str: str, section: str, other: Optional[str] = Query(None, alias="with"),
+                     user: dict = Depends(require_editor)):
+    """Remove a section's readings for a day (a message pasted by mistake)."""
+    record = await _log_section(date_str, section)
+    await _db()[LOGS_COLLECTION].delete_one({"date": record["date"], "section": section})
+    await _log(user["id"], "logs_removed", f"Removed {logbook.title(record)} readings for {_day_label(record['date'])}")
+    return await _logs_day(record["date"], _check_date(other).isoformat() if other else None)
 
 
 # --- sign-in and your own account --------------------------------------------------------
